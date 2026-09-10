@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -45,7 +46,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F1EC),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -58,7 +59,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 width: 44,
                 height: 44,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF7CB79E),
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.person, color: Colors.white, size: 24),
@@ -71,7 +72,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D2D2D),
+                  color: AppColors.textDark,
                 ),
               ),
 
@@ -112,7 +113,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off : Icons.visibility,
                       size: 20,
-                      color: Colors.black45,
+                      color: AppColors.textGray,
                     ),
                     onPressed: () {
                       setState(() => _obscurePassword = !_obscurePassword);
@@ -129,7 +130,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 child: ElevatedButton(
                   onPressed: _handleSignUp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7CB79E),
+                    backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -153,12 +154,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: RichText(
                     text: const TextSpan(
                       text: 'Already have an account? ',
-                      style: TextStyle(color: Colors.black54, fontSize: 14),
+                      style: TextStyle(color: AppColors.textGray, fontSize: 14),
                       children: [
                         TextSpan(
                           text: 'Log In',
                           style: TextStyle(
-                            color: Color(0xFF7CB79E),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -179,7 +180,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+      child: Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textGray)),
     );
   }
 

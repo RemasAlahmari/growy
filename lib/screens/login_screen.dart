@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'signup_screen.dart';
+import '../theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F1EC),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -54,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: 44,
                 height: 44,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF7CB79E),
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.person, color: Colors.white, size: 24),
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D2D2D),
+                  color: AppColors.textDark,
                 ),
               ),
               const SizedBox(height: 4),
@@ -75,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Login',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Color(0xFF7CB79E),
+                  color: AppColors.primary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -84,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const Text(
                 'Username Or Email',
-                style: TextStyle(fontSize: 13, color: Colors.black54),
+                style: TextStyle(fontSize: 13, color: AppColors.textGray),
               ),
               const SizedBox(height: 6),
               TextField(
@@ -96,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const Text(
                 'Password',
-                style: TextStyle(fontSize: 13, color: Colors.black54),
+                style: TextStyle(fontSize: 13, color: AppColors.textGray),
               ),
               const SizedBox(height: 6),
               TextField(
@@ -109,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? Icons.visibility_off
                           : Icons.visibility,
                       size: 20,
-                      color: Colors.black45,
+                      color: AppColors.textGray,
                     ),
                     onPressed: () {
                       setState(() => _obscurePassword = !_obscurePassword);
@@ -126,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ElevatedButton(
                   onPressed: _handleLogin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7CB79E),
+                    backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -155,12 +156,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: RichText(
                     text: const TextSpan(
                       text: "You don't have an account? ",
-                      style: TextStyle(color: Colors.black54, fontSize: 14),
+                      style: TextStyle(color: AppColors.textGray, fontSize: 14),
                       children: [
                         TextSpan(
                           text: 'Sign Up',
                           style: TextStyle(
-                            color: Color(0xFF7CB79E),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

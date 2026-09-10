@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
+import '../theme/app_theme.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -20,12 +21,12 @@ class WelcomeScreen extends StatelessWidget {
               height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF7CB79E), width: 4),
+                border: Border.all(color: AppColors.primary, width: 4),
               ),
               child: const Icon(
                 Icons.emoji_people,
                 size: 44,
-                color: Color(0xFF2D2D2D),
+                color: AppColors.textDark,
               ),
             ),
 
@@ -36,7 +37,7 @@ class WelcomeScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF7CB79E),
+                color: AppColors.primary,
                 fontFamily: 'serif',
               ),
             ),
@@ -49,7 +50,7 @@ class WelcomeScreen extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1,
-                color: Color(0xFF2D2D2D),
+                color: AppColors.textDark,
               ),
             ),
 
@@ -61,7 +62,7 @@ class WelcomeScreen extends StatelessWidget {
               child: Icon(
                 Icons.groups,
                 size: 100,
-                color: const Color(0xFF7CB79E).withOpacity(0.5),
+                color: AppColors.primary.withOpacity(0.5),
               ),
             ),
 
@@ -84,7 +85,7 @@ class WelcomeScreen extends StatelessWidget {
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7CB79E),
+                        backgroundColor: AppColors.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -113,7 +114,7 @@ class WelcomeScreen extends StatelessWidget {
                         );
                       },
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF7CB79E), width: 1.5),
+                        side: const BorderSide(color: AppColors.primary, width: 1.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -123,7 +124,7 @@ class WelcomeScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF7CB79E),
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
