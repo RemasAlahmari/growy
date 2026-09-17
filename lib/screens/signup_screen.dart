@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'avatar_customizer_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -11,7 +12,6 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _usernameController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
@@ -19,7 +19,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void dispose() {
     _emailController.dispose();
     _usernameController.dispose();
-    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -27,19 +26,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _handleSignUp() {
     final email = _emailController.text.trim();
     final username = _usernameController.text.trim();
-    final phone = _phoneController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || username.isEmpty || phone.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (email.isEmpty || username.isEmpty || password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
       return;
     }
 
     // TODO: connect this to your FastAPI backend later (Create Account use case).
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Account created for $username!')),
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const AvatarCustomizerScreen()),
     );
   }
 
@@ -91,15 +90,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextField(
                 controller: _usernameController,
                 decoration: _inputDecoration(hint: 'username'),
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildLabel('Phone Number'),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: _inputDecoration(hint: '05 XXX XXXX'),
               ),
 
               const SizedBox(height: 16),
