@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+
 import 'avatar_customizer_screen.dart';
+import 'login_screen.dart';
+import '../widgets/auth_widgets.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -29,7 +31,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final password = _passwordController.text;
 
     if (email.isEmpty || username.isEmpty || password.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
       return;
@@ -38,152 +40,81 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // TODO: connect this to your FastAPI backend later (Create Account use case).
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const AvatarCustomizerScreen()),
+      MaterialPageRoute(builder: (_) => const AvatarCustomizerScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person, color: Colors.white, size: 24),
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'SIGN UP',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              _buildLabel('Email Address'),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _inputDecoration(hint: 'username@gmail.com'),
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildLabel('User Name'),
-              TextField(
-                controller: _usernameController,
-                decoration: _inputDecoration(hint: 'username'),
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildLabel('Password'),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: _inputDecoration().copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      size: 20,
-                      color: AppColors.textGray,
-                    ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _handleSignUp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: const Text(
-                    'Sign Up',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Center(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: RichText(
-                    text: const TextSpan(
-                      text: 'Already have an account? ',
-                      style: TextStyle(color: AppColors.textGray, fontSize: 14),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          ...bottomCircles(),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
                       children: [
-                        TextSpan(
-                          text: 'Log In',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(height: 48),
+                        const GrowyLogo(width: 93, height: 85),
+                        const GrowyTitle(
+                          title: 'Create Account',
+                          subtitle: 'Start your first streak today',
+                          gap: 24,
+                        ),
+                        const SizedBox(height: 32),
+                        GrowyField(
+                          label: 'Email Address',
+                          hint: 'you@example.com',
+                          icon: Icons.mail_outline,
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        GrowyField(
+                          label: 'Username',
+                          hint: 'username',
+                          icon: Icons.person_outline,
+                          controller: _usernameController,
+                        ),
+                        const SizedBox(height: 16),
+                        GrowyField(
+                          label: 'Password',
+                          hint: '••••••••',
+                          icon: Icons.lock_outline,
+                          controller: _passwordController,
+                          isPassword: true,
+                          obscure: _obscurePassword,
+                          onToggleObscure: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
                           ),
+                        ),
+                        const SizedBox(height: 28),
+                        GrowyPrimaryButton(
+                          label: 'Sign Up',
+                          onPressed: _handleSignUp,
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+                GrowyFooterLink(
+                  prefix: 'Already have an account?',
+                  link: 'Log in',
+                  onTap: () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ),
+                ),
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textGray)),
-    );
-  }
-
-  InputDecoration _inputDecoration({String? hint}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Colors.black26, fontSize: 14),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        ],
       ),
     );
   }
