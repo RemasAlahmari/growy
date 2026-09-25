@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'signup_screen.dart';
-import '../theme/app_theme.dart';
+import '../widgets/auth_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,160 +34,74 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // TODO: connect this to your FastAPI backend later.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Logging in as $username...')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Logging in as $username...')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-
-              // Small avatar/profile placeholder icon, top-left, like the prototype
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person, color: Colors.white, size: 24),
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'Welcome Back!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Login',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'Username Or Email',
-                style: TextStyle(fontSize: 13, color: AppColors.textGray),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _usernameController,
-                decoration: _inputDecoration(),
-              ),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                'Password',
-                style: TextStyle(fontSize: 13, color: AppColors.textGray),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: _inputDecoration().copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      size: 20,
-                      color: AppColors.textGray,
-                    ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: const Text(
-                    'Login',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Center(
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SignUpScreen()),
-                    );
-                  },
-                  child: RichText(
-                    text: const TextSpan(
-                      text: "You don't have an account? ",
-                      style: TextStyle(color: AppColors.textGray, fontSize: 14),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          ...bottomCircles(),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
                       children: [
-                        TextSpan(
-                          text: 'Sign Up',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(height: 48),
+                        const GrowyLogo(width: 93, height: 85),
+                        const GrowyTitle(
+                          title: 'Welcome Back!',
+                          subtitle: 'Log in to keep leveling up',
+                          gap: 24,
+                        ),
+                        const SizedBox(height: 32),
+                        GrowyField(
+                          label: 'Username or Email',
+                          hint: 'you@example.com',
+                          icon: Icons.mail_outline,
+                          controller: _usernameController,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        GrowyField(
+                          label: 'Password',
+                          hint: '••••••••',
+                          icon: Icons.lock_outline,
+                          controller: _passwordController,
+                          isPassword: true,
+                          obscure: _obscurePassword,
+                          onToggleObscure: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
                           ),
+                        ),
+                        const SizedBox(height: 28),
+                        GrowyPrimaryButton(
+                          label: 'Login',
+                          onPressed: _handleLogin,
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+                GrowyFooterLink(
+                  prefix: "Don't have an account?",
+                  link: 'Sign Up',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SignUpScreen()),
+                  ),
+                ),
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration() {
-    return InputDecoration(
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        ],
       ),
     );
   }
