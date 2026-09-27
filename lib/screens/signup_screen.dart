@@ -114,6 +114,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ],
             ),
           ),
+        Positioned(
+            top: 4,
+            left: 4,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF2E2E2E)),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ),
         ],
       ),
     );

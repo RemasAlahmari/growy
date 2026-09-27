@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'home_screen.dart';
 import 'signup_screen.dart';
 import '../widgets/auth_widgets.dart';
 
@@ -34,10 +35,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // TODO: connect this to your FastAPI backend later.
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Logging in as $username...')));
+     Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
