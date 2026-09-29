@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "113118213903",
+    "project_id": "growy-4036d",
+    "storage_bucket": "growy-4036d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113118213903:android:5a2e4251732d8df136307a",
+        "android_client_info": {
+          "package_name": "com.growy.growy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2IBRDtOSvnYlFbTf_SuXYzKwecKh68BA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
