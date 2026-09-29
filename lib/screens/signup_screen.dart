@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 
 import 'avatar_customizer_screen.dart';
 import 'login_screen.dart';
@@ -15,7 +17,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -25,7 +29,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  void _handleSignUp() {
+  void _handleSignUp() async {
     final email = _emailController.text.trim();
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
@@ -37,7 +41,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    // TODO: connect this to your FastAPI backend later (Create Account use case).
+    setState(() => _isLoading = true);
+
+    final error = await _authService.signUp(
+      email: email,
+      password: password,
+      username: username,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+      return;
+    }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const AvatarCustomizerScreen()),

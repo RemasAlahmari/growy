@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-
+import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
+import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -12,33 +13,57 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+   _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
-    final username = _usernameController.text.trim();
+  void _handleLogin() async {
+    final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    if (username.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
       return;
     }
 
-    // TODO: connect this to your FastAPI backend later.
-     Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    setState(() => _isLoading = true);
+
+    final error = await _authService.logIn(
+      email: email,
+      password: password,
     );
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Logged in as $email')),
+    );
+
+  Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(builder: (_) => const HomeScreen()),
+);
+
   }
  
   @override
@@ -65,10 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 32),
                         GrowyField(
-                          label: 'Username or Email',
+                          label: 'Email',
                           hint: 'you@example.com',
                           icon: Icons.mail_outline,
-                          controller: _usernameController,
+                          controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 16),
@@ -86,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 28),
                         GrowyPrimaryButton(
                           label: 'Login',
-                          onPressed: _handleLogin,
+                         onPressed: _handleLogin,
                         ),
                       ],
                     ),

@@ -13,6 +13,6 @@ def verify_token(authorization: str = Header(...)):
 
     try:
         decoded_token = auth.verify_id_token(token)
-        return decoded_token  # فيه firebase_uid, email, ...إلخ
+        return decoded_token 
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
