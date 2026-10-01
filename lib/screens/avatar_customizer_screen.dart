@@ -4,15 +4,24 @@ import '../theme/app_theme.dart';
 import '../widgets/character_preview.dart';
 
 class AvatarCustomizerScreen extends StatefulWidget {
-  const AvatarCustomizerScreen({super.key});
+
+  final CharacterConfig? initialConfig;
+
+  const AvatarCustomizerScreen({super.key, this.initialConfig});
 
   @override
   State<AvatarCustomizerScreen> createState() => _AvatarCustomizerScreenState();
 }
 
 class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
-  CharacterConfig _config = CharacterConfig.defaultConfig();
+  late CharacterConfig _config;
   String _activeCategory = 'skin';
+
+  @override
+  void initState() {
+    super.initState();
+    _config = widget.initialConfig ?? CharacterConfig.defaultConfig();
+  }
 
   final Map<String, List<Color>> _categoryColors = {
     'skin': [
@@ -100,6 +109,9 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Avatar saved!')),
     );
+
+    // Close the customizer and send the new look back to Home.
+    Navigator.pop(context, _config);
   }
 
   @override

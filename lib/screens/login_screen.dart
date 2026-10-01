@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'signup_screen.dart';
 import '../theme/app_theme.dart';
+import 'home_screen.dart';
+import 'signup_screen.dart';
 import '../services/auth_service.dart';
+import '../widgets/auth_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,7 +13,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   bool _obscurePassword = true;
@@ -19,13 +21,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+   _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   void _handleLogin() async {
-    final email = _usernameController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
@@ -57,167 +59,77 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(content: Text('Logged in as $email')),
     );
 
-    // TODO: navigate to Home screen once it exists
-  }
+  Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(builder: (_) => const HomeScreen()),
+);
 
+  }
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person, color: Colors.white, size: 24),
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'Welcome Back!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Login',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                'Username Or Email',
-                style: TextStyle(fontSize: 13, color: AppColors.textGray),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _usernameController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _inputDecoration(),
-              ),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                'Password',
-                style: TextStyle(fontSize: 13, color: AppColors.textGray),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: _inputDecoration().copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      size: 20,
-                      color: AppColors.textGray,
-                    ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'Login',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          ...bottomCircles(),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 48),
+                        const GrowyLogo(width: 93, height: 85),
+                        const GrowyTitle(
+                          title: 'Welcome Back!',
+                          subtitle: 'Log in to keep leveling up',
+                          gap: 24,
+                        ),
+                        const SizedBox(height: 32),
+                        GrowyField(
+                          label: 'Email',
+                          hint: 'you@example.com',
+                          icon: Icons.mail_outline,
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        GrowyField(
+                          label: 'Password',
+                          hint: '••••••••',
+                          icon: Icons.lock_outline,
+                          controller: _passwordController,
+                          isPassword: true,
+                          obscure: _obscurePassword,
+                          onToggleObscure: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
                           ),
                         ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              Center(
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SignUpScreen()),
-                    );
-                  },
-                  child: RichText(
-                    text: const TextSpan(
-                      text: "You don't have an account? ",
-                      style: TextStyle(color: AppColors.textGray, fontSize: 14),
-                      children: [
-                        TextSpan(
-                          text: 'Sign Up',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        const SizedBox(height: 28),
+                        GrowyPrimaryButton(
+                          label: 'Login',
+                         onPressed: _handleLogin,
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+                GrowyFooterLink(
+                  prefix: "Don't have an account?",
+                  link: 'Sign Up',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SignUpScreen()),
+                  ),
+                ),
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration() {
-    return InputDecoration(
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        ],
       ),
     );
   }
