@@ -2,9 +2,10 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Session, select, Field
 from database import create_db_and_tables, get_session
-from models import User, Habit, Avatar
+from models import User, Habit, Avatar, HabitLog, today_ksa
 from auth import verify_token
-
+from datetime import timedelta
+from sqlalchemy import func
 MAX_COLOR_VALUE = 0xFFFFFFFF  # largest possible Flutter Color.value
 
 
@@ -132,3 +133,87 @@ def update_my_avatar(
     session.commit()
     session.refresh(avatar)
     return avatar_to_dict(avatar)
+
+
+def get_current_user(session: Session, decoded_token: dict) -> User:
+    # Finds the logged-in user's row from their Firebase token.
+    user = session.exec(
+        select(User).where(User.firebase_uid == decoded_token["uid"])
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found. Call /users/sync first.")
+    return user
+ 
+ 
+@app.get("/users/me")
+def get_me(
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token)
+):
+    # Everything the Home header needs: name, points, level, streak, today's points.
+    user = get_current_user(session, decoded_token)
+ 
+    today_points = session.exec(
+        select(func.coalesce(func.sum(HabitLog.points_earned), 0)).where(
+            HabitLog.user_id == user.id,
+            HabitLog.completed_date == today_ksa(),
+            HabitLog.verification_status == "verified",
+        )
+    ).one()
+ 
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "total_points": user.total_points,
+        "current_level": user.current_level,
+        "streak_days": user.streak_days,
+        "today_points": today_points,
+    }
+ 
+ 
+@app.get("/habits/today")
+def get_today_habits(
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token)
+):
+    # All habits, plus for THIS user: done today? and how many days in a row.
+    # Only "verified" logs count (AI photo verification passed).
+    user = get_current_user(session, decoded_token)
+    today = today_ksa()
+ 
+    habits = session.exec(select(Habit).order_by(Habit.id)).all()
+    result = []
+ 
+    for habit in habits:
+        done_dates = set(
+            session.exec(
+                select(HabitLog.completed_date).where(
+                    HabitLog.user_id == user.id,
+                    HabitLog.habit_id == habit.id,
+                    HabitLog.verification_status == "verified",
+                )
+            ).all()
+        )
+ 
+        completed_today = today in done_dates
+ 
+        # Streak = consecutive days ending today (or yesterday, if not done yet today,
+        # so the streak doesn't look broken in the morning before the user completes it).
+        day = today if completed_today else today - timedelta(days=1)
+        streak = 0
+        while day in done_dates:
+            streak += 1
+            day -= timedelta(days=1)
+ 
+        result.append({
+            "id": habit.id,
+            "name": habit.name,
+            "points": habit.points,
+            "ai_label": habit.ai_label,
+            "completed_today": completed_today,
+            "streak": streak,
+        })
+ 
+    return result
+ 

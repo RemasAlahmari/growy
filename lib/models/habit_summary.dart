@@ -1,4 +1,3 @@
-enum CompletionMethod {manual, timer, ai}
 
 class HabitSummary {
 

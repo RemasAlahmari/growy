@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import '../models/character_config.dart';
+import '../services/avatar_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/character_preview.dart';
+import 'home_screen.dart';
 
 class AvatarCustomizerScreen extends StatefulWidget {
-
+  // The avatar the user currently has, so the customizer opens showing it
+  // instead of always starting from the default look.
   final CharacterConfig? initialConfig;
 
-  const AvatarCustomizerScreen({super.key, this.initialConfig});
+  
+  final bool isFirstSetup;
+
+  const AvatarCustomizerScreen({
+    super.key,
+    this.initialConfig,
+    this.isFirstSetup = false,
+  });
 
   @override
   State<AvatarCustomizerScreen> createState() => _AvatarCustomizerScreenState();
@@ -16,6 +26,8 @@ class AvatarCustomizerScreen extends StatefulWidget {
 class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
   late CharacterConfig _config;
   String _activeCategory = 'skin';
+  final AvatarService _avatarService = AvatarService();
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -103,24 +115,48 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
     }
   }
 
-  void _handleSave() {
-    // TODO: send _config.toJson() to your FastAPI backend
-    // e.g. PUT /avatars/{id}/customization
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avatar saved!')),
-    );
-
-    // Close the customizer and send the new look back to Home.
-    Navigator.pop(context, _config);
+  Future<void> _handleSave() async {
+    setState(() => _isSaving = true);
+    try {
+      // PUT /users/me/avatar with _config.toJson() (skin, hair, shirt, pants, shoes)
+      await _avatarService.saveMyAvatar(_config);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avatar saved!')),
+      );
+      if (widget.isFirstSetup) {
+        // Sign Up -> Avatar -> Home: replace the whole stack so the back
+        // button can't return to Sign Up or Login.
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen(config: _config)),
+          (route) => false,
+        );
+      } else {
+        // Opened from Home: close and send the new look back.
+        Navigator.pop(context, _config);
+      }
+    } catch (e) {
+      debugPrint('Avatar save failed: $e');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save avatar. Please try again.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      // After Sign Up, don't let the back button return to the Sign Up form.
+      canPop: !widget.isFirstSetup,
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
+        automaticallyImplyLeading: !widget.isFirstSetup,
         title: const Text(
           'Customize Growy',
           style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold),
@@ -137,7 +173,7 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 230, 228, 228),
+                    color: const Color.fromARGB(154, 211, 211, 209),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
                   ),
@@ -246,27 +282,38 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: _handleSave,
+                  onPressed: _isSaving ? null : _handleSave,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Save',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ),
           ],
         ),
       ),
+    ),
     );
   }
 }

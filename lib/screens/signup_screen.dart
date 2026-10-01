@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 
@@ -54,15 +55,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!mounted) return;
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const AvatarCustomizerScreen()),
+      MaterialPageRoute(
+        builder: (_) => const AvatarCustomizerScreen(isFirstSetup: true),
+      ),
     );
   }
 
@@ -136,7 +138,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ],
             ),
           ),
-        Positioned(
+          Positioned(
             top: 4,
             left: 4,
             child: SafeArea(

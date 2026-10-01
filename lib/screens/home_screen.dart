@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'avatar_customizer_screen.dart';
 import '../models/character_config.dart';
 import '../models/habit_summary.dart';
+import '../services/avatar_service.dart';
+import '../services/home_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/character_preview.dart';
 import '../widgets/habit_card.dart';
@@ -11,55 +13,11 @@ const Color _secondaryText = Color(0xFF8A8A8A);
 const Color _pink = Color(0xFFF0B8AE);
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    this.config, // from GET /users/me -> avatar customization
-    this.userName = 'Zad',
-    this.totalXp = 260, //from GET /users/me -> total_points
-    this.streakDays = 15, //  from GET /users/me -> streak_days
-    this.todayXp = 40, //  sum today's habit_logs.points_earned // all these need to be done later after the backend
-    this.habits = const [
-      HabitSummary(
-        id: '1',
-        name: 'Read 20 Pages',
-        category: 'Study', // CLIP label: "a person reading a book"
-        xpValue: 10,
-        completedToday: true,
-        streak: 7,
-      ),
-      HabitSummary(
-        id: '2',
-        name: 'Morning Workout',
-        category: 'Health', // CLIP label: "a person working out or exercising"
-        xpValue: 10,
-        completedToday: true,
-        streak: 12,
-      ),
-      HabitSummary(
-        id: '3',
-        name: 'Drink a Glass of Water',
-        category: 'Health', // CLIP label: "a glass of water"
-        xpValue: 10,
-        completedToday: false,
-        streak: 21,
-      ),
-      HabitSummary(
-        id: '4',
-        name: 'Evening Walk',
-        category: 'Health', // CLIP label: "a person walking outdoor"
-        xpValue: 10,
-        completedToday: false,
-        streak: 4,
-      ),
-    ],
-  });
+  const HomeScreen({super.key, this.config});
 
+  // Optional starting look (e.g. passed right after first-time avatar setup).
+  // The saved avatar is then loaded from GET /users/me/avatar.
   final CharacterConfig? config;
-  final String userName;
-  final int totalXp;
-  final int streakDays;
-  final int todayXp;
-  final List<HabitSummary> habits;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -69,11 +27,62 @@ class _HomeScreenState extends State<HomeScreen> {
   // The avatar currently shown on Home. Starts from what was passed in
   // (later: from GET /users/me) and changes when the user saves in the customizer.
   late CharacterConfig _config;
+  final AvatarService _avatarService = AvatarService();
+  final HomeService _homeService = HomeService();
+
+  // Data from the backend (GET /users/me and GET /habits/today)
+  UserProfile? _profile;
+  List<HabitSummary> _habits = [];
+  bool _isLoading = true;
+  String? _error;
+
+  int get _totalXp => _profile?.totalPoints ?? 0;
 
   @override
   void initState() {
     super.initState();
     _config = widget.config ?? CharacterConfig.defaultConfig();
+    _loadHomeData();
+    _loadSavedAvatar();
+  }
+
+  Future<void> _loadHomeData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([
+        _homeService.getMe(),
+        _homeService.getTodayHabits(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _profile = results[0] as UserProfile;
+        _habits = results[1] as List<HabitSummary>;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Could not load home data: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Could not load your data. Check your connection and try again.';
+      });
+    }
+  }
+
+  // GET /users/me/avatar — shows the user's saved colors when Home opens.
+  // The backend returns default colors if nothing was saved yet. If the request
+  // fails (e.g. backend not running), Home just keeps the default look.
+  Future<void> _loadSavedAvatar() async {
+    try {
+      final saved = await _avatarService.getMyAvatar();
+      if (!mounted) return;
+      setState(() => _config = saved);
+    } catch (e) {
+      debugPrint('Could not load saved avatar: $e');
+    }
   }
 
   // Opens the customizer with the current look, then updates Home
@@ -97,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _level {
     var level = 1;
     for (var i = 0; i < _levelFloors.length; i++) {
-      if (widget.totalXp >= _levelFloors[i]) level = i + 1;
+      if (_totalXp >= _levelFloors[i]) level = i + 1;
     }
     return level;
   }
@@ -105,9 +114,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _isMaxLevel => _level >= _maxLevel;
   int get _currentLevelFloor => _levelFloors[_level - 1];
   int? get _nextLevelFloor => _isMaxLevel ? null : _levelFloors[_level];
-  int get _xpIntoLevel => widget.totalXp - _currentLevelFloor;
+  int get _xpIntoLevel => _totalXp - _currentLevelFloor;
   int? get _xpToNextLevel =>
-      _nextLevelFloor == null ? null : _nextLevelFloor! - widget.totalXp;
+      _nextLevelFloor == null ? null : _nextLevelFloor! - _totalXp;
   double get _levelProgress {
     final next = _nextLevelFloor;
     if (next == null) return 1.0;
@@ -116,16 +125,54 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final habits = widget.habits;
-    final doneCount = habits.where((h) => h.completedToday).length;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: ListView(
+            Expanded(child: _buildBody()),
+            const _BottomNav(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading && _profile == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _profile == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 14, color: _secondaryText),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _loadHomeData,
+                child: const Text('Try again'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final habits = _habits;
+    final doneCount = habits.where((h) => h.completedToday).length;
+
+    return RefreshIndicator(
+      // Pull down to reload points, streak, and habits
+      onRefresh: _loadHomeData,
+      child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
                   Text(
@@ -137,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Text(
-                    'Hello, ${widget.userName}!',
+                    'Hello, ${_profile?.username ?? ''}!',
                     style: GoogleFonts.fraunces(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
@@ -227,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _isMaxLevel
-                              ? '${widget.totalXp} XP'
+                              ? '${_totalXp} XP'
                               : '$_xpIntoLevel / ${_nextLevelFloor! - _currentLevelFloor} XP',
                           style: GoogleFonts.poppins(
                             fontSize: 11,
@@ -247,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: Icons.local_fire_department,
                           color: _pink,
                           label: 'Streak',
-                          value: '${widget.streakDays}',
+                          value: '${_profile?.streakDays ?? 0}',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -256,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: Icons.bolt,
                           color: AppColors.primary,
                           label: 'Today',
-                          value: '${widget.todayXp} XP',
+                          value: '${_profile?.todayPoints ?? 0} XP',
                         ),
                       ),
                     ],
@@ -290,17 +337,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: HabitCard(
                         habit: h,
                         onTap: () {
-                          // TODO: route to the right completion flow based on h.method
+                          // TODO: open the AI photo verification screen for this habit
                         },
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            const _BottomNav(),
-          ],
-        ),
       ),
     );
   }

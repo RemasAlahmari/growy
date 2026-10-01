@@ -1,10 +1,16 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  static const String backendUrl = 'http://127.0.0.1:8000';
+ static String get backendUrl {
+  if (kIsWeb) return 'http://127.0.0.1:8000';
+  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+  return 'http://127.0.0.1:8000';
+}
 
   Future<String?> signUp({
     required String email,
