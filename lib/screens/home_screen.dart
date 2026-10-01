@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'avatar_customizer_screen.dart';
+import 'verify_habit_screen.dart';
 import '../models/character_config.dart';
 import '../models/habit_summary.dart';
 import '../services/avatar_service.dart';
@@ -24,8 +25,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // The avatar currently shown on Home. Starts from what was passed in
-  // (later: from GET /users/me) and changes when the user saves in the customizer.
+  
   late CharacterConfig _config;
   final AvatarService _avatarService = AvatarService();
   final HomeService _homeService = HomeService();
@@ -83,6 +83,23 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Could not load saved avatar: $e');
     }
+  }
+
+  // Opens AI photo verification for a habit, then reloads Home so the
+  // points, streak, and "done" state update after a successful check.
+  Future<void> _openVerification(HabitSummary habit) async {
+    if (habit.completedToday) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Already completed today. Nice!')),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => VerifyHabitScreen(habit: habit)),
+    );
+    if (!mounted) return;
+    _loadHomeData();
   }
 
   // Opens the customizer with the current look, then updates Home
@@ -336,9 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: HabitCard(
                         habit: h,
-                        onTap: () {
-                          // TODO: open the AI photo verification screen for this habit
-                        },
+                        onTap: () => _openVerification(h),
                       ),
                     ),
                   ),
