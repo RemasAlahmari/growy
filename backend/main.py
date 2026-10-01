@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from database import create_db_and_tables, get_session
-from models import User
+from models import User, Habit
 from auth import verify_token
 
 app = FastAPI()
@@ -49,3 +49,11 @@ def sync_user(
     session.commit()
     session.refresh(new_user)
     return new_user
+
+@app.get("/habits")
+def get_habits(
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token)
+):
+    habits = session.exec(select(Habit).order_by(Habit.id)).all()
+    return habits
