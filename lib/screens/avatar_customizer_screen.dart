@@ -137,7 +137,7 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color.fromARGB(255, 230, 228, 228),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
                   ),
