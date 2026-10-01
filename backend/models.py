@@ -1,7 +1,9 @@
 from typing import Optional
 from datetime import datetime, date, timezone, timedelta
+from sqlalchemy import BigInteger
 from sqlmodel import SQLModel, Field
 
+# توقيت السعودية (UTC+3)
 KSA_TZ = timezone(timedelta(hours=3))
 
 
@@ -40,3 +42,16 @@ class HabitLog(SQLModel, table=True):
     verification_status: str = Field(default="pending")
     predicted_label: Optional[str] = None
     confidence: Optional[float] = None
+
+
+class Avatar(SQLModel, table=True):
+    # One avatar per user. Colors are stored as Flutter Color.value numbers (ARGB),
+    # which are too big for a normal INTEGER, so BigInteger is used.
+    # Defaults match CharacterConfig.defaultConfig() in the Flutter app.
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True)
+    skin: int = Field(default=0xFFF5D0B0, sa_type=BigInteger)
+    hair: int = Field(default=0xFF8B5E3C, sa_type=BigInteger)
+    shirt: int = Field(default=0xFFFF8FA3, sa_type=BigInteger)
+    pants: int = Field(default=0xFF3A506B, sa_type=BigInteger)
+    shoes: int = Field(default=0xFFFFFFFF, sa_type=BigInteger)
