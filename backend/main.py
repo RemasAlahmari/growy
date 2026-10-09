@@ -6,6 +6,7 @@ from database import create_db_and_tables, get_session
 from models import User, Habit, Avatar, HabitLog, today_ksa
 from auth import verify_token
 from leveling import calculate_level
+from streaks import count_streak
 from datetime import timedelta
 from sqlalchemy import func
 MAX_COLOR_VALUE = 0xFFFFFFFF  # largest possible Flutter Color.value
@@ -153,6 +154,19 @@ def get_current_user(session: Session, decoded_token: dict) -> User:
     if not user:
         raise HTTPException(status_code=404, detail="User not found. Call /users/sync first.")
     return user
+
+
+def get_user_streak(session: Session, user_id: int) -> int:
+    # Days in a row with at least one verified habit (any habit).
+    done_dates = set(
+        session.exec(
+            select(HabitLog.completed_date).where(
+                HabitLog.user_id == user_id,
+                HabitLog.verification_status == "verified",
+            ).distinct()
+        ).all()
+    )
+    return count_streak(done_dates, today_ksa())
  
  
 @app.get("/users/me")
@@ -177,7 +191,7 @@ def get_me(
         "email": user.email,
         "total_points": user.total_points,
         "current_level": user.current_level,
-        "streak_days": user.streak_days,
+        "streak_days": get_user_streak(session, user.id),
         "today_points": today_points,
     }
  
@@ -206,23 +220,13 @@ def get_today_habits(
             ).all()
         )
  
-        completed_today = today in done_dates
- 
-        # Streak = consecutive days ending today (or yesterday, if not done yet today,
-        # so the streak doesn't look broken in the morning before the user completes it).
-        day = today if completed_today else today - timedelta(days=1)
-        streak = 0
-        while day in done_dates:
-            streak += 1
-            day -= timedelta(days=1)
- 
         result.append({
             "id": habit.id,
             "name": habit.name,
             "points": habit.points,
             "ai_label": habit.ai_label,
-            "completed_today": completed_today,
-            "streak": streak,
+            "completed_today": today in done_dates,
+            "streak": count_streak(done_dates, today),
         })
  
     return result
@@ -365,6 +369,7 @@ def get_progress(
     return {
         "total_points": user.total_points,
         "current_level": user.current_level,
+        "streak_days": get_user_streak(session, user.id),
         "total_habits_completed": total_habits_completed,
         "last_7_days": last_7_days,
     }
