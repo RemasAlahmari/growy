@@ -4,6 +4,7 @@ from sqlmodel import SQLModel, Session, select, Field
 from database import create_db_and_tables, get_session
 from models import User, Habit, Avatar, HabitLog, today_ksa
 from auth import verify_token
+from leveling import calculate_level
 from datetime import timedelta
 from sqlalchemy import func
 MAX_COLOR_VALUE = 0xFFFFFFFF  # largest possible Flutter Color.value
@@ -285,7 +286,16 @@ def complete_habit_ai(
         confidence=confidence,
     )
     session.add(log)
+
+    # 7. On success: add the points and recalculate the level
+    previous_level = user.current_level
+    if is_verified:
+        user.total_points += habit.points
+        user.current_level = calculate_level(user.total_points)
+        session.add(user)
+
     session.commit()
+    session.refresh(user)
 
     if is_verified:
         attempts_remaining = MAX_REJECTED_ATTEMPTS - rejected_count
@@ -298,4 +308,7 @@ def complete_habit_ai(
         "confidence": confidence,
         "points_earned": log.points_earned,
         "attempts_remaining": attempts_remaining,
+        "total_points": user.total_points,
+        "current_level": user.current_level,
+        "leveled_up": user.current_level > previous_level,
     }
