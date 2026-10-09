@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Session, select, Field
@@ -33,7 +34,15 @@ def avatar_to_dict(avatar: Avatar) -> dict:
     }
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once when the server starts
+    create_db_and_tables()
+    yield
+    # (code after yield would run when the server stops)
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Allow the Flutter web app to call this backend from the browser
 app.add_middleware(
@@ -43,10 +52,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
 
 @app.get("/health")
 def health_check():
