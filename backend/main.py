@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Session, select, Field
 from database import create_db_and_tables, get_session
@@ -7,6 +7,9 @@ from auth import verify_token
 from datetime import timedelta
 from sqlalchemy import func
 MAX_COLOR_VALUE = 0xFFFFFFFF  # largest possible Flutter Color.value
+MAX_REJECTED_ATTEMPTS = 3
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 class AvatarUpdate(SQLModel):
@@ -216,4 +219,83 @@ def get_today_habits(
         })
  
     return result
- 
+
+
+@app.post("/habits/{habit_id}/complete/ai")
+def complete_habit_ai(
+    habit_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token)
+):
+    # 1. Find the user from the token and the habit from the URL
+    user = get_current_user(session, decoded_token)
+
+    habit = session.get(Habit, habit_id)
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found.")
+
+    today = today_ksa()
+
+    # 2. Block if this habit is already completed today
+    already_verified = session.exec(
+        select(HabitLog).where(
+            HabitLog.user_id == user.id,
+            HabitLog.habit_id == habit.id,
+            HabitLog.completed_date == today,
+            HabitLog.verification_status == "verified",
+        )
+    ).first()
+    if already_verified:
+        raise HTTPException(status_code=409, detail="This habit is already completed today.")
+
+    # 3. Block if the user used all rejected attempts today
+    rejected_count = session.exec(
+        select(func.count()).select_from(HabitLog).where(
+            HabitLog.user_id == user.id,
+            HabitLog.habit_id == habit.id,
+            HabitLog.completed_date == today,
+            HabitLog.verification_status == "rejected",
+        )
+    ).one()
+    if rejected_count >= MAX_REJECTED_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="No attempts left for this habit today. Try again tomorrow.")
+
+    # 4. Check the uploaded file is an image and not too large
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="Only JPEG, PNG, or WEBP images are allowed.")
+    image_bytes = file.file.read(MAX_IMAGE_SIZE + 1)
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=413, detail="Image is too large (max 5 MB).")
+
+    # 5. Verify the image
+    # TODO (AI teammate): replace these three lines with the real CLIP verification
+    is_verified = True
+    predicted_label = habit.ai_label
+    confidence = 1.0
+
+    # 6. Save this attempt (verified or rejected)
+    log = HabitLog(
+        habit_id=habit.id,
+        user_id=user.id,
+        completed_date=today,
+        points_earned=habit.points if is_verified else 0,
+        verification_status="verified" if is_verified else "rejected",
+        predicted_label=predicted_label,
+        confidence=confidence,
+    )
+    session.add(log)
+    session.commit()
+
+    if is_verified:
+        attempts_remaining = MAX_REJECTED_ATTEMPTS - rejected_count
+    else:
+        attempts_remaining = MAX_REJECTED_ATTEMPTS - (rejected_count + 1)
+
+    return {
+        "verification_status": log.verification_status,
+        "predicted_label": predicted_label,
+        "confidence": confidence,
+        "points_earned": log.points_earned,
+        "attempts_remaining": attempts_remaining,
+    }
