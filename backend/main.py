@@ -12,6 +12,7 @@ MAX_COLOR_VALUE = 0xFFFFFFFF  # largest possible Flutter Color.value
 MAX_REJECTED_ATTEMPTS = 3
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+PROGRESS_DAYS = 7
 
 
 class AvatarUpdate(SQLModel):
@@ -316,4 +317,54 @@ def complete_habit_ai(
         "total_points": user.total_points,
         "current_level": user.current_level,
         "leveled_up": user.current_level > previous_level,
+    }
+
+
+@app.get("/progress")
+def get_progress(
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token)
+):
+    # Stats for the Progress screen: totals + points and habits per day for the last 7 days.
+    user = get_current_user(session, decoded_token)
+    today = today_ksa()
+    start_date = today - timedelta(days=PROGRESS_DAYS - 1)
+
+    # One query: total points and number of completed habits, grouped by day
+    rows = session.exec(
+        select(
+            HabitLog.completed_date,
+            func.sum(HabitLog.points_earned),
+            func.count(),
+        ).where(
+            HabitLog.user_id == user.id,
+            HabitLog.verification_status == "verified",
+            HabitLog.completed_date >= start_date,
+        ).group_by(HabitLog.completed_date)
+    ).all()
+    per_day = {day: (points, count) for day, points, count in rows}
+
+    # Fill in all 7 days, using 0 for days with no completions
+    last_7_days = []
+    for i in range(PROGRESS_DAYS):
+        day = start_date + timedelta(days=i)
+        points, count = per_day.get(day, (0, 0))
+        last_7_days.append({
+            "date": day.isoformat(),
+            "points": points,
+            "habits_completed": count,
+        })
+
+    total_habits_completed = session.exec(
+        select(func.count()).select_from(HabitLog).where(
+            HabitLog.user_id == user.id,
+            HabitLog.verification_status == "verified",
+        )
+    ).one()
+
+    return {
+        "total_points": user.total_points,
+        "current_level": user.current_level,
+        "total_habits_completed": total_habits_completed,
+        "last_7_days": last_7_days,
     }
