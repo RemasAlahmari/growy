@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/character_config.dart';
 import '../services/avatar_service.dart';
 import '../theme/app_theme.dart';
@@ -10,7 +11,6 @@ class AvatarCustomizerScreen extends StatefulWidget {
   // instead of always starting from the default look.
   final CharacterConfig? initialConfig;
 
-  
   final bool isFirstSetup;
 
   const AvatarCustomizerScreen({
@@ -121,9 +121,8 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
       // PUT /users/me/avatar with _config.toJson() (skin, hair, shirt, pants, shoes)
       await _avatarService.saveMyAvatar(_config);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avatar saved!')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Avatar saved!')));
       if (widget.isFirstSetup) {
         // Sign Up -> Avatar -> Home: replace the whole stack so the back
         // button can't return to Sign Up or Login.
@@ -141,7 +140,9 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save avatar. Please try again.')),
+        const SnackBar(
+          content: Text('Could not save avatar. Please try again.'),
+        ),
       );
     }
   }
@@ -152,168 +153,185 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
       // After Sign Up, don't let the back button return to the Sign Up form.
       canPop: !widget.isFirstSetup,
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
         backgroundColor: AppColors.background,
-        elevation: 0,
-        automaticallyImplyLeading: !widget.isFirstSetup,
-        title: const Text(
-          'Customize Growy',
-          style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Character preview
-            Expanded(
-              flex: 5,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(154, 211, 211, 209),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  child: CharacterPreview(config: _config),
-                ),
-              ),
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          automaticallyImplyLeading: !widget.isFirstSetup,
+          title: Text(
+            'Customize Growy',
+            style: TextStyle(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.bold,
             ),
-
-            // Category tabs
-            SizedBox(
-              height: 84,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  final isActive = _activeCategory == cat['key'];
-                  return GestureDetector(
-                    onTap: () => setState(() => _activeCategory = cat['key']),
-                    child: Container(
-                      width: 72,
-                      decoration: BoxDecoration(
-                        color: isActive ? AppColors.primary : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isActive ? AppColors.primary : Colors.black12,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            cat['icon'],
-                            color: isActive ? Colors.white : AppColors.textDark,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            cat['label'],
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isActive ? Colors.white : AppColors.textDark,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+          ),
+          iconTheme: IconThemeData(color: AppColors.textDark),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Character preview
+              Expanded(
+                flex: 5,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(154, 211, 211, 209),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.3),
+                        width: 2,
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Color swatch grid
-            Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
+                    padding: const EdgeInsets.all(12),
+                    child: CharacterPreview(config: _config),
                   ),
-                  itemCount: _categoryColors[_activeCategory]!.length,
+                ),
+              ),
+
+              // Category tabs
+              SizedBox(
+                height: 84,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
                   itemBuilder: (context, index) {
-                    final color = _categoryColors[_activeCategory]![index];
-                    final isSelected = _currentSelection.value == color.value;
+                    final cat = _categories[index];
+                    final isActive = _activeCategory == cat['key'];
                     return GestureDetector(
-                      onTap: () => _selectColor(color),
+                      onTap: () => setState(() => _activeCategory = cat['key']),
                       child: Container(
+                        width: 72,
                         decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
+                          color: isActive ? AppColors.primary : AppColors.card,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isSelected ? AppColors.primary : Colors.black12,
-                            width: isSelected ? 3 : 1,
+                            color: isActive
+                                ? AppColors.primary
+                                : GrowyPalette.hairline,
                           ),
-                          boxShadow: isSelected
-                              ? [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.4),
-                              blurRadius: 8,
-                            ),
-                          ]
-                              : null,
                         ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white)
-                            : null,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              cat['icon'],
+                              color: isActive
+                                  ? Colors.white
+                                  : AppColors.textDark,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              cat['label'],
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isActive
+                                    ? Colors.white
+                                    : AppColors.textDark,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
                 ),
               ),
-            ),
 
-            // Save button
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _handleSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
+              const SizedBox(height: 12),
+
+              // Color swatch grid
+              Expanded(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
                         ),
+                    itemCount: _categoryColors[_activeCategory]!.length,
+                    itemBuilder: (context, index) {
+                      final color = _categoryColors[_activeCategory]![index];
+                      final isSelected = _currentSelection.value == color.value;
+                      return GestureDetector(
+                        onTap: () => _selectColor(color),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : GrowyPalette.hairline,
+                              width: isSelected ? 3 : 1,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.primary.withOpacity(0.4),
+                                      blurRadius: 8,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+
+              // Save button
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _handleSave,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: AppColors.primary.withOpacity(
+                        0.6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Save',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

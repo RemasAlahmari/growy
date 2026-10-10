@@ -16,6 +16,7 @@ class AuthService {
     required String email,
     required String password,
     required String username,
+    required String gender, // 'male' or 'female'
   }) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
@@ -26,7 +27,9 @@ class AuthService {
       final token = await credential.user!.getIdToken();
 
       final response = await http.post(
-        Uri.parse('$backendUrl/users/sync?username=$username'),
+        Uri.parse('$backendUrl/users/sync').replace(
+          queryParameters: {'username': username, 'gender': gender},
+        ),
         headers: {'Authorization': 'Bearer $token'},
       );
 

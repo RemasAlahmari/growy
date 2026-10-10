@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/motion/motion.dart';
 import '../theme/app_theme.dart';
 
 /// Growy logo badge; falls back to a placeholder until assets/images/growy_logo.png exists.
@@ -18,7 +19,7 @@ class GrowyLogo extends StatelessWidget {
       errorBuilder: (_, _, _) => SizedBox(
         width: width,
         height: height,
-        child: const Icon(Icons.emoji_people, color: AppColors.primary, size: 48),
+        child: Icon(Icons.emoji_people, color: AppColors.primary, size: 48),
       ),
     );
   }
@@ -42,7 +43,8 @@ class GrowyPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GrowyPressEffect(
+      child: Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
@@ -72,6 +74,7 @@ class GrowyPrimaryButton extends StatelessWidget {
             letterSpacing: 0.2,
           ),
         ),
+      ),
       ),
     );
   }
@@ -140,7 +143,7 @@ class GrowyField extends StatelessWidget {
                   )
                 : null,
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppColors.inputFill,
             constraints: const BoxConstraints(minHeight: 54, maxHeight: 54),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             enabledBorder: _border(AppColors.border, 1),
@@ -148,6 +151,141 @@ class GrowyField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+enum GrowyGender { male, female }
+
+extension GrowyGenderApi on GrowyGender {
+  /// Value sent to the backend.
+  String get apiValue => name; // 'male' / 'female'
+  String get label => this == GrowyGender.male ? 'Male' : 'Female';
+  IconData get icon =>
+      this == GrowyGender.male ? Icons.male_rounded : Icons.female_rounded;
+}
+
+/// "Gender" label with two choice tiles, styled like [GrowyField].
+class GrowyGenderPicker extends StatelessWidget {
+  final GrowyGender? value;
+  final ValueChanged<GrowyGender> onChanged;
+  final String? errorText;
+
+  const GrowyGenderPicker({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.errorText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Gender',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppColors.secondaryText,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (final g in GrowyGender.values) ...[
+              if (g != GrowyGender.values.first) const SizedBox(width: 12),
+              Expanded(child: _GenderTile(
+                gender: g,
+                selected: value == g,
+                hasError: errorText != null,
+                onTap: () => onChanged(g),
+              )),
+            ],
+          ],
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.topLeft,
+          child: errorText == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(
+                    errorText!,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: GrowyPalette.error,
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GenderTile extends StatelessWidget {
+  final GrowyGender gender;
+  final bool selected;
+  final bool hasError;
+  final VoidCallback onTap;
+
+  const _GenderTile({
+    required this.gender,
+    required this.selected,
+    required this.hasError,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected
+        ? AppColors.primary
+        : (hasError ? GrowyPalette.error : AppColors.border);
+    final foreground = selected ? AppColors.primary : AppColors.secondaryText;
+    final radius = BorderRadius.circular(12);
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: gender.label,
+      excludeSemantics: true,
+      child: GrowyPressEffect(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              height: 54,
+              decoration: BoxDecoration(
+                color: selected ? GrowyPalette.primaryTint : AppColors.inputFill,
+                borderRadius: radius,
+                border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(gender.icon, size: 20, color: foreground),
+                  const SizedBox(width: 6),
+                  Text(
+                    gender.label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? AppColors.primary : AppColors.mainText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -269,8 +407,10 @@ class GrowyCircle extends StatelessWidget {
   }
 }
 
-/// Bottom-left green + bottom-right pink circles used on Login and Sign Up.
+/// The slowly drifting green + peach circles at the bottom of Login and
+/// Sign Up (see core/motion/growy_background_blobs.dart).
 List<Widget> bottomCircles() => const [
-      GrowyCircle(color: AppColors.primary, size: 420, left: -200, bottom: -110),
-      GrowyCircle(color: AppColors.secondary, size: 420, right: -150, bottom: -150),
+      Positioned.fill(
+        child: GrowyBackgroundBlobs(preset: GrowyBlobPreset.auth),
+      ),
     ];

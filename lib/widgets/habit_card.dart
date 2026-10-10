@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/habit_summary.dart';
+import '../theme/app_theme.dart';
 
-const Color _secondaryText = Color(0xFF8A8A8A);
-const Color _cardBorder = Color(0xFFEDEDED);
-const Color _successGreen = Color(0xFF4CAF50);
-const Color _accent = Color(0xFF6FA37B); // one color for all the habits
-
-
-
+Color get _secondaryText => GrowyPalette.textSecondary;
+Color get _cardBorder => GrowyPalette.cardBorder;
+Color get _successGreen => GrowyPalette.success;
+Color get _accent => GrowyPalette.primary;
 
 class HabitCard extends StatelessWidget {
   const HabitCard({super.key, required this.habit, required this.onTap});
@@ -20,14 +18,17 @@ class HabitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final done = habit.completedToday;
- 
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
-      child: Container(
+      // Border and icon change smoothly when the habit becomes done.
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: done ? _successGreen.withOpacity(0.4) : _cardBorder,
@@ -35,17 +36,26 @@ class HabitCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 color: done ? _successGreen : _accent.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                done ? Icons.check : Icons.camera_alt_outlined,
-                color: done ? Colors.white : _accent,
-                size: 20,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutBack,
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
+                child: Icon(
+                  done ? Icons.check : Icons.camera_alt_outlined,
+                  key: ValueKey(done),
+                  color: done ? Colors.white : _accent,
+                  size: 20,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -55,7 +65,7 @@ class HabitCard extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: done ? _successGreen : const Color(0xFF2E2E2E),
+                  color: done ? _successGreen : GrowyPalette.textMain,
                 ),
               ),
             ),
@@ -64,15 +74,29 @@ class HabitCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.local_fire_department, size: 14, color: Color(0xFFF0B8AE)),
+                    const Icon(
+                      Icons.local_fire_department,
+                      size: 14,
+                      color: Color(0xFFF0B8AE),
+                    ),
                     const SizedBox(width: 2),
-                    Text('${habit.streak}', style: GoogleFonts.poppins(fontSize: 12, color: _secondaryText)),
+                    Text(
+                      '${habit.streak}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: _secondaryText,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '+${habit.xpValue} XP',
-                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: _accent),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _accent,
+                  ),
                 ),
               ],
             ),
@@ -82,4 +106,3 @@ class HabitCard extends StatelessWidget {
     );
   }
 }
- 

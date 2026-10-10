@@ -31,6 +31,11 @@ dependencies:
   image_picker: ^1.2.3
   http_parser: ^4.1.2
 
+  flutter_animate: ^4.5.2        # entrances, stagger, shimmer
+  confetti: ^0.8.0               # level-up only
+  shared_preferences: ^2.3.0     # remembers Light / Dark / System
+  share_plus: ">=11.0.0 <14.0.0" 
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

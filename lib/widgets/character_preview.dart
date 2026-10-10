@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../models/character_config.dart';
 import '../utils/avatar_stage.dart';
 
@@ -25,13 +26,13 @@ class _CharacterPreviewState extends State<CharacterPreview> {
   static final Map<String, String> _rawSvgCache = {};
   String? _rawSvg;
   String? _loadedPath;
- 
+
   @override
   void initState() {
     super.initState();
     _loadSvg();
   }
- 
+
   @override
   void didUpdateWidget(covariant CharacterPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -39,7 +40,7 @@ class _CharacterPreviewState extends State<CharacterPreview> {
       _loadSvg();
     }
   }
- 
+
   Future<void> _loadSvg() async {
     final path = avatarAssetForLevel(widget.level);
     final cached = _rawSvgCache[path];
@@ -58,10 +59,10 @@ class _CharacterPreviewState extends State<CharacterPreview> {
       _loadedPath = path;
     });
   }
- 
+
   String _hex(Color c) =>
       '#${c.value.toRadixString(16).substring(2).toUpperCase()}';
- 
+
   /// Case-insensitive find/replace — export tools (Figma, Illustrator,
   /// Inkscape, etc.) often flatten hex colors to lowercase when you re-save
   /// an SVG, which silently broke the old case-sensitive replaceAll.
@@ -71,7 +72,7 @@ class _CharacterPreviewState extends State<CharacterPreview> {
       _hex(color),
     );
   }
- 
+
   @override
   Widget build(BuildContext context) {
     if (_rawSvg == null) {
@@ -80,14 +81,14 @@ class _CharacterPreviewState extends State<CharacterPreview> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
- 
+
     var recolored = _rawSvg!;
     recolored = _replaceColor(recolored, '#FF00FF', widget.config.skinColor);
     recolored = _replaceColor(recolored, '#00FF00', widget.config.hairColor);
     recolored = _replaceColor(recolored, '#00FFFF', widget.config.shirtColor);
     recolored = _replaceColor(recolored, '#FFFF00', widget.config.pantsColor);
     recolored = _replaceColor(recolored, '#FF6600', widget.config.shoesColor);
- 
+
     return AspectRatio(
       aspectRatio: 400 / 800,
       child: AnimatedSwitcher(
