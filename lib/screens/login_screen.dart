@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
+import '../core/motion/motion.dart';
 import '../widgets/auth_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-   _emailController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -39,37 +41,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final error = await _authService.logIn(
-      email: email,
-      password: password,
-    );
+    final error = await _authService.logIn(email: email, password: password);
 
     setState(() => _isLoading = false);
 
     if (!mounted) return;
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Logged in as $email')),
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Logged in as $email')));
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
-
-  Navigator.pushReplacement(
-  context,
-  MaterialPageRoute(builder: (_) => const HomeScreen()),
-);
-
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       body: Stack(
         children: [
           ...bottomCircles(),
@@ -82,36 +78,51 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       children: [
                         const SizedBox(height: 48),
-                        const GrowyLogo(width: 93, height: 85),
-                        const GrowyTitle(
-                          title: 'Welcome Back!',
-                          subtitle: 'Log in to keep leveling up',
-                          gap: 24,
+                        GrowySlideIn(
+                          index: 0,
+                          child: const GrowyLogo(width: 93, height: 85),
+                        ),
+                        GrowySlideIn(
+                          index: 1,
+                          child: const GrowyTitle(
+                            title: 'Welcome Back!',
+                            subtitle: 'Log in to keep leveling up',
+                            gap: 24,
+                          ),
                         ),
                         const SizedBox(height: 32),
-                        GrowyField(
-                          label: 'Email',
-                          hint: 'you@example.com',
-                          icon: Icons.mail_outline,
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                        GrowySlideIn(
+                          index: 2,
+                          child: GrowyField(
+                            label: 'Email',
+                            hint: 'you@example.com',
+                            icon: Icons.mail_outline,
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        GrowyField(
-                          label: 'Password',
-                          hint: '••••••••',
-                          icon: Icons.lock_outline,
-                          controller: _passwordController,
-                          isPassword: true,
-                          obscure: _obscurePassword,
-                          onToggleObscure: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
+                        GrowySlideIn(
+                          index: 3,
+                          child: GrowyField(
+                            label: 'Password',
+                            hint: '••••••••',
+                            icon: Icons.lock_outline,
+                            controller: _passwordController,
+                            isPassword: true,
+                            obscure: _obscurePassword,
+                            onToggleObscure: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 28),
-                        GrowyPrimaryButton(
-                          label: 'Login',
-                         onPressed: _handleLogin,
+                        GrowySlideIn(
+                          index: 4,
+                          child: GrowyPrimaryButton(
+                            label: 'Login',
+                            onPressed: _handleLogin,
+                          ),
                         ),
                       ],
                     ),

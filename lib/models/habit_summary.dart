@@ -1,6 +1,4 @@
-
 class HabitSummary {
-
   final String id;
   final String name;
   final String category; //Health ,Study used in CLIP#for AI verification; not shown in the UI anymore
@@ -9,11 +7,10 @@ class HabitSummary {
   final bool completedToday;
   final int streak;
 
-
   const HabitSummary({
     required this.id,
     required this.name,
-    required this.category,  
+    required this.category,
     required this.xpValue,
     this.completedToday = false,
     this.streak = 0,

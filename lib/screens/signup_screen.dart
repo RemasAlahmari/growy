@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 
 import 'avatar_customizer_screen.dart';
 import 'login_screen.dart';
+import '../core/motion/motion.dart';
 import '../widgets/auth_widgets.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -21,6 +22,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _authService = AuthService();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  GrowyGender? _gender;
+  String? _genderError;
 
   @override
   void dispose() {
@@ -35,7 +38,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || username.isEmpty || password.isEmpty) {
+    if (_gender == null) setState(() => _genderError = 'Please choose your gender');
+    if (email.isEmpty || username.isEmpty || password.isEmpty || _gender == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
@@ -48,6 +52,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       email: email,
       password: password,
       username: username,
+      gender: _gender!.apiValue,
     );
 
     setState(() => _isLoading = false);
@@ -71,7 +76,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       body: Stack(
         children: [
           ...bottomCircles(),
@@ -84,43 +89,73 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: Column(
                       children: [
                         const SizedBox(height: 48),
-                        const GrowyLogo(width: 93, height: 85),
-                        const GrowyTitle(
-                          title: 'Create Account',
-                          subtitle: 'Start your first streak today',
-                          gap: 24,
+                        GrowySlideIn(
+                          index: 0,
+                          child: const GrowyLogo(width: 93, height: 85),
+                        ),
+                        GrowySlideIn(
+                          index: 1,
+                          child: const GrowyTitle(
+                            title: 'Create Account',
+                            subtitle: 'Start your first streak today',
+                            gap: 24,
+                          ),
                         ),
                         const SizedBox(height: 32),
-                        GrowyField(
-                          label: 'Email Address',
-                          hint: 'you@example.com',
-                          icon: Icons.mail_outline,
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                        GrowySlideIn(
+                          index: 2,
+                          child: GrowyField(
+                            label: 'Email Address',
+                            hint: 'you@example.com',
+                            icon: Icons.mail_outline,
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        GrowyField(
-                          label: 'Username',
-                          hint: 'username',
-                          icon: Icons.person_outline,
-                          controller: _usernameController,
+                        GrowySlideIn(
+                          index: 3,
+                          child: GrowyField(
+                            label: 'Username',
+                            hint: 'username',
+                            icon: Icons.person_outline,
+                            controller: _usernameController,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        GrowyField(
-                          label: 'Password',
-                          hint: '••••••••',
-                          icon: Icons.lock_outline,
-                          controller: _passwordController,
-                          isPassword: true,
-                          obscure: _obscurePassword,
-                          onToggleObscure: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
+                        GrowySlideIn(
+                          index: 4,
+                          child: GrowyGenderPicker(
+                            value: _gender,
+                            errorText: _genderError,
+                            onChanged: (g) => setState(() {
+                              _gender = g;
+                              _genderError = null;
+                            }),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        GrowySlideIn(
+                          index: 5,
+                          child: GrowyField(
+                            label: 'Password',
+                            hint: '••••••••',
+                            icon: Icons.lock_outline,
+                            controller: _passwordController,
+                            isPassword: true,
+                            obscure: _obscurePassword,
+                            onToggleObscure: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 28),
-                        GrowyPrimaryButton(
-                          label: 'Sign Up',
-                          onPressed: _handleSignUp,
+                        GrowySlideIn(
+                          index: 6,
+                          child: GrowyPrimaryButton(
+                            label: 'Sign Up',
+                            onPressed: _handleSignUp,
+                          ),
                         ),
                       ],
                     ),
@@ -143,7 +178,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             left: 4,
             child: SafeArea(
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Color(0xFF2E2E2E)),
+                icon: Icon(Icons.arrow_back, color: AppColors.textDark),
                 onPressed: () => Navigator.pop(context),
               ),
             ),

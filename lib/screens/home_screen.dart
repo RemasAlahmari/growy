@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../core/motion/motion.dart';
 import 'avatar_customizer_screen.dart';
 import 'verify_habit_screen.dart';
+import 'groups_screen.dart';
+import 'habits_screen.dart';
+import 'me_screen.dart';
 import '../models/character_config.dart';
 import '../models/habit_summary.dart';
 import '../services/avatar_service.dart';
@@ -10,8 +15,8 @@ import '../theme/app_theme.dart';
 import '../widgets/character_preview.dart';
 import '../widgets/habit_card.dart';
 
-const Color _secondaryText = Color(0xFF8A8A8A);
-const Color _pink = Color(0xFFF0B8AE);
+Color get _secondaryText => GrowyPalette.textSecondary;
+Color get _pink => GrowyPalette.secondary;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.config});
@@ -25,7 +30,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  
   late CharacterConfig _config;
   final AvatarService _avatarService = AvatarService();
   final HomeService _homeService = HomeService();
@@ -67,7 +71,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'Could not load your data. Check your connection and try again.';
+        _error =
+            'Could not load your data. Check your connection and try again.';
       });
     }
   }
@@ -116,41 +121,58 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 0–499 -> Level 1, 500–1499 -> Level 2, 1500–2999 -> Level 3, 3000+ -> Level 4 (max)
-  static const List<int> _levelFloors = [0, 500, 1500, 3000];
+  // The level comes from the backend (current_level, 0–4).
+  // These floors match the backend and are only used for the progress bar:
+  // 0–99 -> Level 0, 100–499 -> 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max)
+  static const List<int> _levelFloors = [0, 100, 500, 1500, 3000];
   static const int _maxLevel = 4;
 
   int get _level {
-    var level = 1;
-    for (var i = 0; i < _levelFloors.length; i++) {
-      if (_totalXp >= _levelFloors[i]) level = i + 1;
-    }
+    final level = _profile?.currentLevel ?? 0;
+    if (level < 0) return 0;
+    if (level > _maxLevel) return _maxLevel;
     return level;
   }
 
   bool get _isMaxLevel => _level >= _maxLevel;
-  int get _currentLevelFloor => _levelFloors[_level - 1];
-  int? get _nextLevelFloor => _isMaxLevel ? null : _levelFloors[_level];
-  int get _xpIntoLevel => _totalXp - _currentLevelFloor;
-  int? get _xpToNextLevel =>
-      _nextLevelFloor == null ? null : _nextLevelFloor! - _totalXp;
+  int get _currentLevelFloor => _levelFloors[_level];
+  int? get _nextLevelFloor => _isMaxLevel ? null : _levelFloors[_level + 1];
+  int get _xpIntoLevel {
+    final xp = _totalXp - _currentLevelFloor;
+    return xp < 0 ? 0 : xp;
+  }
+
+  int? get _xpToNextLevel {
+    final next = _nextLevelFloor;
+    if (next == null) return null;
+    final left = next - _totalXp;
+    return left < 0 ? 0 : left;
+  }
+
   double get _levelProgress {
     final next = _nextLevelFloor;
     if (next == null) return 1.0;
-    return _xpIntoLevel / (next - _currentLevelFloor);
+    return (_xpIntoLevel / (next - _currentLevelFloor)).clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(child: _buildBody()),
-            const _BottomNav(),
-          ],
-        ),
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: GrowyBackgroundBlobs(preset: GrowyBlobPreset.home),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(child: _buildBody()),
+                const _BottomNav(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -190,174 +212,212 @@ class _HomeScreenState extends State<HomeScreen> {
       // Pull down to reload points, streak, and habits
       onRefresh: _loadHomeData,
       child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        children: [
+          GrowyFadeIn(
+            offset: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatDate(DateTime.now()),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _secondaryText,
+                  ),
+                ),
+                Text(
+                  'Hello, ${_profile?.username ?? ''}!',
+                  style: GoogleFonts.fraunces(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Avatar hero — the level-up "evolve" moment lives here
+          GrowyFadeIn(
+            delay: const Duration(milliseconds: 80),
+            child: Center(
+              child: Column(
                 children: [
-                  Text(
-                    _formatDate(DateTime.now()),
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _secondaryText,
-                    ),
-                  ),
-                  Text(
-                    'Hello, ${_profile?.username ?? ''}!',
-                    style: GoogleFonts.fraunces(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Avatar hero — the level-up "evolve" moment lives here
-                  Center(
-                    child: Column(
+                  SizedBox(
+                    height: 300,
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      clipBehavior: Clip.none,
                       children: [
-                        SizedBox(
-                          height: 300,
-                          child: Stack(
-                            alignment: Alignment.bottomCenter,
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned(
-                                bottom: 6,
-                                child: Container(
-                                  width: 190,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.25),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 20,
-                                child: SizedBox(
-                                  width: 140, // CharacterPreview keeps its 400:800 ratio, so height follows at 280
-                                  child: GestureDetector(
-                                    onTap: _openCustomizer,
-                                    child: CharacterPreview(
-                                      config: _config,
-                                      level: _level,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        TextButton.icon(
-                          onPressed: _openCustomizer,
-                          icon: const Icon(Icons.edit),
-                          label: const Text('Customize'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Lvl. $_level',
-                          style: GoogleFonts.fraunces(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        Text(
-                          _isMaxLevel
-                              ? 'Max level reached!'
-                              : '$_xpToNextLevel XP to Evolve',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: _secondaryText,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: SizedBox(
-                            width: 220,
-                            child: LinearProgressIndicator(
-                              value: _levelProgress,
-                              minHeight: 8,
-                              backgroundColor: AppColors.primary.withOpacity(
-                                0.15,
-                              ),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.primary,
-                              ),
+                        Positioned(
+                          bottom: 6,
+                          child: Container(
+                            width: 190,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _isMaxLevel
-                              ? '${_totalXp} XP'
-                              : '$_xpIntoLevel / ${_nextLevelFloor! - _currentLevelFloor} XP',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: _secondaryText,
+                        Positioned(
+                          bottom: 20,
+                          child: SizedBox(
+                            width: 140, // CharacterPreview keeps its 400:800 ratio, so height follows at 280
+                            child: GestureDetector(
+                              onTap: _openCustomizer,
+                              child: CharacterPreview(
+                                config: _config,
+                                level: _level,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
 
-                  // Streak + Today's XP only — Rank intentionally left out for now
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          icon: Icons.local_fire_department,
-                          color: _pink,
-                          label: 'Streak',
-                          value: '${_profile?.streakDays ?? 0}',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatCard(
-                          icon: Icons.bolt,
-                          color: AppColors.primary,
-                          label: 'Today',
-                          value: '${_profile?.todayPoints ?? 0} XP',
-                        ),
-                      ),
-                    ],
+                  TextButton.icon(
+                    onPressed: _openCustomizer,
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Customize'),
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Today's Habits",
-                        style: GoogleFonts.fraunces(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textDark,
-                        ),
-                      ),
-                      Text(
-                        '$doneCount/${habits.length} Done',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _secondaryText,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Lvl. $_level',
+                    style: GoogleFonts.fraunces(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  ...habits.map(
-                    (h) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: HabitCard(
-                        habit: h,
-                        onTap: () => _openVerification(h),
+                  Text(
+                    _isMaxLevel
+                        ? 'Max level reached!'
+                        : '$_xpToNextLevel XP to Evolve',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: _secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      width: 220,
+                      // XP bar fills smoothly when points change (600 ms).
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: _levelProgress),
+                        duration: GrowyMotion.count,
+                        curve: GrowyMotion.enterCurve,
+                        builder: (context, value, _) => LinearProgressIndicator(
+                          value: value,
+                          minHeight: 8,
+                          backgroundColor: AppColors.primary.withOpacity(0.15),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  GrowyCountUp(
+                    value: _isMaxLevel ? _totalXp : _xpIntoLevel,
+                    builder: (xp) => Text(
+                      _isMaxLevel
+                          ? '$xp XP'
+                          : '$xp / ${_nextLevelFloor! - _currentLevelFloor} XP',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: _secondaryText,
                       ),
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Streak + Today's XP only — Rank intentionally left out for now
+          Row(
+            children: [
+              Expanded(
+                child: GrowySlideIn(
+                  index: 0,
+                  baseDelay: const Duration(milliseconds: 120),
+                  child: _StatCard(
+                    icon: Icons.local_fire_department,
+                    color: _pink,
+                    label: 'Streak',
+                    value: '${_profile?.streakDays ?? 0}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GrowySlideIn(
+                  index: 1,
+                  baseDelay: const Duration(milliseconds: 120),
+                  child: GrowyCountUp(
+                    value: _profile?.todayPoints ?? 0,
+                    builder: (xp) => _StatCard(
+                      icon: Icons.bolt,
+                      color: AppColors.primary,
+                      label: 'Today',
+                      value: '$xp XP',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Today's Habits",
+                style: GoogleFonts.fraunces(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              Text(
+                '$doneCount/${habits.length} Done',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _secondaryText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < habits.length; i++)
+            Padding(
+              key: ValueKey(habits[i].id),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GrowySlideIn(
+                index: i,
+                baseDelay: const Duration(milliseconds: 200),
+                child: GrowyPressEffect(
+                  child: HabitCard(
+                    habit: habits[i],
+                    onTap: () => _openVerification(habits[i]),
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 14),
+          // Suggested groups come after today's habits, so the daily loop stays first.
+          const GroupsToJoinStrip(),
+        ],
       ),
     );
   }
@@ -429,6 +489,10 @@ class _StatCard extends StatelessWidget {
 class _BottomNav extends StatelessWidget {
   const _BottomNav();
 
+  void _open(BuildContext context, Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -439,11 +503,27 @@ class _BottomNav extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _NavItem(icon: Icons.groups_outlined, label: 'Groups'),
-              _NavItem(icon: Icons.track_changes_outlined, label: 'Habits'),
-              _NavItem(icon: Icons.home_filled, label: 'Home', active: true),
-              _NavItem(icon: Icons.person_outline, label: 'Me'),
+            children: [
+              _NavItem(
+                icon: Icons.groups_outlined,
+                label: 'Groups',
+                onTap: () => _open(context, const GroupsScreen()),
+              ),
+              _NavItem(
+                icon: Icons.track_changes_outlined,
+                label: 'Habits',
+                onTap: () => _open(context, const HabitsScreen()),
+              ),
+              const _NavItem(
+                icon: Icons.home_filled,
+                label: 'Home',
+                active: true,
+              ),
+              _NavItem(
+                icon: Icons.person_outline,
+                label: 'Me',
+                onTap: () => _open(context, const MeScreen()),
+              ),
             ],
           ),
         ),
@@ -457,29 +537,38 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.label,
     this.active = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final color = active ? AppColors.primary : _secondaryText;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 11,
-            color: color,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: color,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
