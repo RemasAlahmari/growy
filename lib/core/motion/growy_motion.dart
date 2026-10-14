@@ -18,6 +18,10 @@ class GrowyMotion {
   static const Duration success = Duration(milliseconds: 700);
   static const Duration count = Duration(milliseconds: 600);
   static const Duration levelUp = Duration(milliseconds: 1600);
+
+  /// The avatar evolving into its next stage on Home (before the level-up card).
+  static const Duration evolve = Duration(milliseconds: 2400);
+
   static const Duration reducedFade = Duration(milliseconds: 150);
 
   /// Lists stop staggering after this many items; the rest arrive together.

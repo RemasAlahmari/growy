@@ -1,31 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../core/motion/growy_motion.dart';
 import '../models/character_config.dart';
 import '../utils/avatar_stage.dart';
+import '../utils/avatar_svg.dart';
 
-/// whenever the level — and therefore the underlying SVG — changes.
-
-/// `CharacterPreview(config: _config)` in the customizer keep compiling
-
+/// Shows the recoloured avatar for a gender + backend level (0–4).
+///
+/// `CharacterPreview(config: _config)` still works: gender defaults to girl
+/// and level to 1.
 class CharacterPreview extends StatefulWidget {
   final CharacterConfig config;
   final int level;
+  final AvatarGender gender;
 
-  const CharacterPreview({required this.config, this.level = 1, super.key});
+  const CharacterPreview({
+    required this.config,
+    this.level = 1,
+    this.gender = AvatarGender.girl,
+    super.key,
+  });
 
   @override
   State<CharacterPreview> createState() => _CharacterPreviewState();
 }
 
 class _CharacterPreviewState extends State<CharacterPreview> {
-  // Raw (uncolored) SVG text, cached per asset path so multiple
-  // CharacterPreview instances (Home, Customizer, ...) don't each re-read
-  // the same file from disk.
-  static final Map<String, String> _rawSvgCache = {};
   String? _rawSvg;
   String? _loadedPath;
+
+  String get _assetPath => avatarAssetFor(widget.gender, widget.level);
 
   @override
   void initState() {
@@ -36,14 +41,16 @@ class _CharacterPreviewState extends State<CharacterPreview> {
   @override
   void didUpdateWidget(covariant CharacterPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (avatarAssetForLevel(widget.level) != _loadedPath) {
+    // Reload only when the file changes (new stage or new gender),
+    // not when just the colours change.
+    if (_assetPath != _loadedPath) {
       _loadSvg();
     }
   }
 
   Future<void> _loadSvg() async {
-    final path = avatarAssetForLevel(widget.level);
-    final cached = _rawSvgCache[path];
+    final path = _assetPath;
+    final cached = cachedAvatarSvg(path);
     if (cached != null) {
       setState(() {
         _rawSvg = cached;
@@ -51,8 +58,7 @@ class _CharacterPreviewState extends State<CharacterPreview> {
       });
       return;
     }
-    final raw = await rootBundle.loadString(path);
-    _rawSvgCache[path] = raw;
+    final raw = await loadAvatarSvg(path);
     if (!mounted) return;
     setState(() {
       _rawSvg = raw;
@@ -60,47 +66,23 @@ class _CharacterPreviewState extends State<CharacterPreview> {
     });
   }
 
-  String _hex(Color c) =>
-      '#${c.value.toRadixString(16).substring(2).toUpperCase()}';
-
-  /// Case-insensitive find/replace — export tools (Figma, Illustrator,
-  /// Inkscape, etc.) often flatten hex colors to lowercase when you re-save
-  /// an SVG, which silently broke the old case-sensitive replaceAll.
-  String _replaceColor(String svg, String placeholder, Color color) {
-    return svg.replaceAll(
-      RegExp(RegExp.escape(placeholder), caseSensitive: false),
-      _hex(color),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_rawSvg == null) {
       return const AspectRatio(
-        aspectRatio: 400 / 800,
+        aspectRatio: kAvatarAspectRatio,
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    var recolored = _rawSvg!;
-    recolored = _replaceColor(recolored, '#FF00FF', widget.config.skinColor);
-    recolored = _replaceColor(recolored, '#00FF00', widget.config.hairColor);
-    recolored = _replaceColor(recolored, '#00FFFF', widget.config.shirtColor);
-    recolored = _replaceColor(recolored, '#FFFF00', widget.config.pantsColor);
-    recolored = _replaceColor(recolored, '#FF6600', widget.config.shoesColor);
+    final recolored = recolorAvatarSvg(_rawSvg!, widget.config);
 
     return AspectRatio(
-      aspectRatio: 400 / 800,
+      aspectRatio: kAvatarAspectRatio,
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 450),
-        switchInCurve: Curves.easeOutBack,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) => ScaleTransition(
-          scale: animation,
-          child: FadeTransition(opacity: animation, child: child),
-        ),
-        // Keyed by stage, not by color, so re-coloring never re-triggers
-        // the evolve animation — only an actual level/stage change does.
+        // A quick fade when the gender or stage changes. Re-colouring
+        // doesn't trigger it, because the key is the file path.
+        duration: GrowyMotion.micro,
         child: SvgPicture.string(recolored, key: ValueKey(_loadedPath)),
       ),
     );

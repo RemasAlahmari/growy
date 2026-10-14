@@ -18,6 +18,9 @@ Color get _errorColor => GrowyPalette.error;
 /// camera (gallery uploads are not allowed),
 /// the backend checks it with CLIP, and the result is shown here.
 /// Home reloads its data when this screen closes.
+///
+/// A level-up is celebrated on Home (avatar evolution + level-up card),
+/// not here, so the card never shows twice.
 class VerifyHabitScreen extends StatefulWidget {
   const VerifyHabitScreen({super.key, required this.habit});
 
@@ -71,8 +74,8 @@ class _VerifyHabitScreenState extends State<VerifyHabitScreen> {
       debugPrint('Image pick failed: $e');
       if (!mounted) return;
       setState(
-        () => _error =
-            'Could not open the camera. Check that Growy is allowed to use it.',
+            () => _error =
+        'Could not open the camera. Check that Growy is allowed to use it.',
       );
     }
   }
@@ -100,9 +103,6 @@ class _VerifyHabitScreenState extends State<VerifyHabitScreen> {
           _outOfAttempts = true;
         }
       });
-      if (result.leveledUp && result.currentLevel != null) {
-        await _showLevelUp(result.currentLevel!);
-      }
     } on VerificationException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -117,10 +117,6 @@ class _VerifyHabitScreenState extends State<VerifyHabitScreen> {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
-
-  /// The one full celebration: glow, level number, leaf confetti.
-  Future<void> _showLevelUp(int level) =>
-      showGrowyLevelUp(context, level: level);
 
   @override
   Widget build(BuildContext context) {
@@ -263,20 +259,20 @@ class _PhotoPreview extends StatelessWidget {
 
     Widget photo = bytes == null
         ? Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.photo_camera_outlined,
-                size: 40,
-                color: _secondaryText,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Take a photo to verify your habit',
-                style: GoogleFonts.poppins(fontSize: 13, color: _secondaryText),
-              ),
-            ],
-          )
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.photo_camera_outlined,
+          size: 40,
+          color: _secondaryText,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Take a photo to verify your habit',
+          style: GoogleFonts.poppins(fontSize: 13, color: _secondaryText),
+        ),
+      ],
+    )
         : Image.memory(bytes!, fit: BoxFit.cover, gaplessPlayback: true);
 
     // A new photo shrinks in slightly from a full-bleed "snap".
@@ -285,11 +281,11 @@ class _PhotoPreview extends StatelessWidget {
           .animate(key: ValueKey(bytes.hashCode))
           .fadeIn(duration: 200.ms)
           .scale(
-            begin: const Offset(1.04, 1.04),
-            end: const Offset(1, 1),
-            duration: 300.ms,
-            curve: GrowyMotion.enterCurve,
-          );
+        begin: const Offset(1.04, 1.04),
+        end: const Offset(1, 1),
+        duration: 300.ms,
+        curve: GrowyMotion.enterCurve,
+      );
     }
 
     return AspectRatio(
@@ -314,22 +310,22 @@ class _PhotoPreview extends StatelessWidget {
                 if (isChecking && bytes != null && !reduced)
                   IgnorePointer(
                     child:
-                        DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0),
-                                    Colors.white.withValues(alpha: 0.35),
-                                    Colors.white.withValues(alpha: 0),
-                                  ],
-                                  stops: const [0.3, 0.5, 0.7],
-                                ),
-                              ),
-                            )
-                            .animate(
-                              onPlay: (controller) => controller.repeat(),
-                            )
-                            .slideX(begin: -1, end: 1, duration: 1400.ms),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0),
+                            Colors.white.withValues(alpha: 0.35),
+                            Colors.white.withValues(alpha: 0),
+                          ],
+                          stops: const [0.3, 0.5, 0.7],
+                        ),
+                      ),
+                    )
+                        .animate(
+                      onPlay: (controller) => controller.repeat(),
+                    )
+                        .slideX(begin: -1, end: 1, duration: 1400.ms),
                   ),
                 if (isChecking)
                   Align(
@@ -477,8 +473,8 @@ class _ResultBanner extends StatelessWidget {
                 Text(
                   passed
                       ? (result.leveledUp && result.currentLevel != null
-                            ? "Level up! You're now Level ${result.currentLevel}."
-                            : 'Nice work, your avatar is growing.')
+                      ? "Level up! You're now Level ${result.currentLevel}. Go back to Home to celebrate!"
+                      : 'Nice work, your avatar is growing.')
                       : _attemptsText(result.attemptsRemaining),
                   style: GoogleFonts.poppins(
                     fontSize: 12,
@@ -491,7 +487,7 @@ class _ResultBanner extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Detected: ${result.predictedLabel} '
-                    '(${(confidence * 100).toStringAsFixed(0)}%)',
+                        '(${(confidence * 100).toStringAsFixed(0)}%)',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       color: _secondaryText,
@@ -534,21 +530,21 @@ class _PrimaryButton extends StatelessWidget {
         ),
         child: isLoading
             ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.white,
-                ),
-              )
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: Colors.white,
+          ),
+        )
             : Text(
-                label,
-                style: GoogleFonts.fraunces(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
+          label,
+          style: GoogleFonts.fraunces(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
       ),
     );
   }
