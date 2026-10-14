@@ -14,6 +14,7 @@ class UserProfile {
     required this.currentLevel,
     required this.streakDays,
     required this.todayPoints,
+    this.gender,
   });
 
   final String username;
@@ -22,6 +23,9 @@ class UserProfile {
   final int streakDays;
   final int todayPoints;
 
+  /// 'male' / 'female'. Null until the backend adds gender to GET /users/me.
+  final String? gender;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       username: json['username'] as String? ?? '',
@@ -29,6 +33,7 @@ class UserProfile {
       currentLevel: (json['current_level'] as num? ?? 0).toInt(),
       streakDays: (json['streak_days'] as num? ?? 0).toInt(),
       todayPoints: (json['today_points'] as num? ?? 0).toInt(),
+      gender: json['gender'] as String?,
     );
   }
 }
@@ -50,9 +55,9 @@ class HomeService {
   Future<UserProfile> getMe() async {
     final response = await http
         .get(
-          Uri.parse('${AuthService.backendUrl}/users/me'),
-          headers: await _headers(),
-        )
+      Uri.parse('${AuthService.backendUrl}/users/me'),
+      headers: await _headers(),
+    )
         .timeout(_timeout);
 
     if (response.statusCode != 200) {
@@ -69,9 +74,9 @@ class HomeService {
   Future<List<HabitSummary>> getTodayHabits() async {
     final response = await http
         .get(
-          Uri.parse('${AuthService.backendUrl}/habits/today'),
-          headers: await _headers(),
-        )
+      Uri.parse('${AuthService.backendUrl}/habits/today'),
+      headers: await _headers(),
+    )
         .timeout(_timeout);
 
     if (response.statusCode != 200) {

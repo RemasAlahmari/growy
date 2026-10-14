@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/avatar_gender_store.dart';
+import '../utils/avatar_stage.dart';
 
 import 'avatar_customizer_screen.dart';
 import 'login_screen.dart';
@@ -65,10 +67,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
+    // Remember boy/girl on this phone (the backend can't store it yet),
+    // and open the customizer showing the matching character.
+    final avatarGender =
+    _gender == GrowyGender.male ? AvatarGender.boy : AvatarGender.girl;
+    await AvatarGenderStore.save(avatarGender);
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => const AvatarCustomizerScreen(isFirstSetup: true),
+        builder: (_) => AvatarCustomizerScreen(
+          isFirstSetup: true,
+          initialGender: avatarGender,
+        ),
       ),
     );
   }
@@ -145,7 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             isPassword: true,
                             obscure: _obscurePassword,
                             onToggleObscure: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
+                                  () => _obscurePassword = !_obscurePassword,
                             ),
                           ),
                         ),

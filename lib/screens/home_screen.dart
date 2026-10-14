@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/motion/growy_level_up_animation.dart';
 import '../core/motion/motion.dart';
 import 'avatar_customizer_screen.dart';
 import 'verify_habit_screen.dart';
@@ -9,10 +11,13 @@ import 'habits_screen.dart';
 import 'me_screen.dart';
 import '../models/character_config.dart';
 import '../models/habit_summary.dart';
+import '../services/avatar_gender_store.dart';
 import '../services/avatar_service.dart';
 import '../services/home_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/avatar_stage.dart';
 import '../widgets/character_preview.dart';
+import '../widgets/evolving_avatar.dart';
 import '../widgets/habit_card.dart';
 
 Color get _secondaryText => GrowyPalette.textSecondary;
@@ -34,6 +39,17 @@ class _HomeScreenState extends State<HomeScreen> {
   final AvatarService _avatarService = AvatarService();
   final HomeService _homeService = HomeService();
 
+  // Boy or girl character (saved on the phone, or from the backend later).
+  AvatarGender _gender = AvatarGender.girl;
+
+  // While the avatar evolves, these hold the old and new level.
+  // null = no evolution playing, Home shows the normal CharacterPreview.
+  int? _evolveFrom;
+  int? _evolveTo;
+
+  // Debug only: which evolution the long-press test plays next (1→2, 2→3, 3→4).
+  int _debugNextFrom = 1;
+
   // Data from the backend (GET /users/me and GET /habits/today)
   UserProfile? _profile;
   List<HabitSummary> _habits = [];
@@ -46,8 +62,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _config = widget.config ?? CharacterConfig.defaultConfig();
+    _loadGender();
     _loadHomeData();
     _loadSavedAvatar();
+  }
+
+  // Picks boy/girl: saved on this phone first, then the backend value
+  // (once GET /users/me returns "gender"), otherwise girl.
+  Future<void> _loadGender() async {
+    final gender = await AvatarGenderStore.resolve(
+      backendValue: _profile?.gender,
+    );
+    if (!mounted) return;
+    setState(() => _gender = gender);
   }
 
   Future<void> _loadHomeData() async {
@@ -61,20 +88,88 @@ class _HomeScreenState extends State<HomeScreen> {
         _homeService.getTodayHabits(),
       ]);
       if (!mounted) return;
+
+      // The level before this reload (null on the very first load, so
+      // opening the app never plays a level-up).
+      final oldLevel = _profile == null ? null : _level;
+
       setState(() {
         _profile = results[0] as UserProfile;
         _habits = results[1] as List<HabitSummary>;
         _isLoading = false;
       });
+      _loadGender();
+
+      final newLevel = _level;
+      if (oldLevel != null && newLevel > oldLevel) {
+        _celebrateLevelUp(oldLevel, newLevel);
+      }
     } catch (e) {
       debugPrint('Could not load home data: $e');
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error =
-            'Could not load your data. Check your connection and try again.';
+        'Could not load your data. Check your connection and try again.';
       });
     }
+  }
+
+  // Level went up. If the character changes (1→2, 2→3, 3→4), the avatar
+  // evolves first and the level-up card opens after. Otherwise (0→1) only
+  // the card opens.
+  void _celebrateLevelUp(int fromLevel, int toLevel) {
+    if (avatarStageForLevel(toLevel) > avatarStageForLevel(fromLevel)) {
+      setState(() {
+        _evolveFrom = fromLevel;
+        _evolveTo = toLevel;
+      });
+    } else {
+      _showLevelUpCard(toLevel, evolved: false);
+    }
+  }
+
+  // Called by EvolvingAvatar when its animation is done.
+  void _onEvolutionFinished() {
+    final toLevel = _evolveTo ?? _level;
+    setState(() {
+      _evolveFrom = null;
+      _evolveTo = null;
+    });
+    _showLevelUpCard(toLevel, evolved: true);
+  }
+
+  // The teammate's level-up card (growy_level_up_animation.dart), with the
+  // new character glowing inside it.
+  void _showLevelUpCard(int level, {required bool evolved}) {
+    if (!mounted) return;
+    showGrowyLevelUp(
+      context,
+      level: level,
+      message: evolved
+          ? null // default text: "...Your avatar evolved!"
+          : "You're now Level $level. Keep going to evolve!",
+      avatar: SizedBox(
+        height: 130,
+        child: CharacterPreview(
+          config: _config,
+          gender: _gender,
+          level: level,
+        ),
+      ),
+    );
+  }
+
+  // DEBUG ONLY (long-press the avatar): plays 1→2, then 2→3, then 3→4,
+  // without needing real XP. Does nothing in release builds.
+  void _debugEvolve() {
+    if (_evolveFrom != null) return; // one at a time
+    final from = _debugNextFrom;
+    _debugNextFrom = from == 3 ? 1 : from + 1;
+    setState(() {
+      _evolveFrom = from;
+      _evolveTo = from + 1;
+    });
   }
 
   // GET /users/me/avatar — shows the user's saved colors when Home opens.
@@ -107,17 +202,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadHomeData();
   }
 
-  // Opens the customizer with the current look, then updates Home
-  // if the user pressed Save (pressing back returns null = no change).
+  // Opens the customizer with the current look, gender and level, then
+  // updates Home if the user pressed Save (pressing back returns null = no change).
   Future<void> _openCustomizer() async {
     final result = await Navigator.push<CharacterConfig>(
       context,
       MaterialPageRoute(
-        builder: (_) => AvatarCustomizerScreen(initialConfig: _config),
+        builder: (_) => AvatarCustomizerScreen(
+          initialConfig: _config,
+          initialGender: _gender,
+          level: _level,
+        ),
       ),
     );
     if (result != null) {
       setState(() => _config = result);
+      _loadGender(); // the user may have switched girl/boy
     }
   }
 
@@ -173,6 +273,32 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // The avatar spot: the evolution while it plays, otherwise the normal avatar.
+  Widget _buildAvatar() {
+    final evolveFrom = _evolveFrom;
+    final evolveTo = _evolveTo;
+    if (evolveFrom != null && evolveTo != null) {
+      return EvolvingAvatar(
+        key: ValueKey('evolve-$evolveFrom-$evolveTo'),
+        config: _config,
+        gender: _gender,
+        fromLevel: evolveFrom,
+        toLevel: evolveTo,
+        width: 178,
+        onFinished: _onEvolutionFinished,
+      );
+    }
+    return GestureDetector(
+      onTap: _openCustomizer,
+      onLongPress: kDebugMode ? _debugEvolve : null,
+      child: CharacterPreview(
+        config: _config,
+        gender: _gender,
+        level: _level,
       ),
     );
   }
@@ -266,14 +392,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Positioned(
                           bottom: 20,
                           child: SizedBox(
-                            width: 140, // CharacterPreview keeps its 400:800 ratio, so height follows at 280
-                            child: GestureDetector(
-                              onTap: _openCustomizer,
-                              child: CharacterPreview(
-                                config: _config,
-                                level: _level,
-                              ),
-                            ),
+                            width: 178, // keeps the 520:820 ratio, so height follows at about 280
+                            child: _buildAvatar(),
                           ),
                         ),
                       ],

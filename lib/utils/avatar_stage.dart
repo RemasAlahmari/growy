@@ -1,17 +1,30 @@
-/// There are 5 levels (0–4, decided by the backend). Each level has its own
-/// avatar stage, 1–5:  Level 0 → stage 1 · Level 1 → stage 2 · … · Level 4 → stage 5.
-/// Asset files are named character_lvl1.svg … character_lvl5.svg.
+/// Which avatar SVG to show for a gender + backend level.
 ///
-/// Add a stage number to [kAvailableAvatarStages] once its SVG exists.
-/// Until then, a level shows the highest stage that does exist, instead of
-/// crashing on a missing asset file.
+/// The backend has 5 levels (0–4, see home_screen.dart: 0 / 100 / 500 /
+/// 1500 / 3000 XP). There are 4 character stages per gender, so levels 0 and 1
+/// share stage 1. This means the character changes at 500, 1500 and 3000 XP.
+///
+///   Level 0 → stage 1 · Level 1 → stage 1 · Level 2 → stage 2
+///   Level 3 → stage 3 · Level 4 → stage 4
+///
+/// Files: assets/character/girl_character_lvl1.svg … girl_character_lvl4.svg
+///        assets/character/boy_character_lvl1.svg  … boy_character_lvl4.svg
+/// All are 520 × 820, feet at y = 800, body centre at x = 260.
 
-const List<int> kAvailableAvatarStages = [1];
+enum AvatarGender { girl, boy }
 
-String avatarAssetForLevel(int level) {
-  final targetStage = level.clamp(0, 4) + 1;
-  final availableStage = kAvailableAvatarStages
-      .where((s) => s <= targetStage)
-      .fold<int>(1, (best, s) => s > best ? s : best);
-  return 'assets/character/character_lvl$availableStage.svg';
-}
+/// Size of every avatar SVG frame.
+const double kAvatarFrameWidth = 520;
+const double kAvatarFrameHeight = 820;
+const double kAvatarAspectRatio = kAvatarFrameWidth / kAvatarFrameHeight;
+
+/// Index = backend level (0–4), value = character stage (1–4).
+const List<int> _stageForLevel = [1, 1, 2, 3, 4];
+
+/// Character stage (1–4) for a backend level. Out-of-range levels are clamped.
+int avatarStageForLevel(int level) => _stageForLevel[level.clamp(0, 4)];
+
+/// Asset path for a gender + backend level,
+/// e.g. (girl, 2) → 'assets/character/girl_character_lvl2.svg'.
+String avatarAssetFor(AvatarGender gender, int level) =>
+    'assets/character/${gender.name}_character_lvl${avatarStageForLevel(level)}.svg';
