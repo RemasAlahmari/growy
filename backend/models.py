@@ -29,7 +29,10 @@ class Habit(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True)
     points: int
-    ai_label: str  # candidate label used for CLIP matching
+    # Instruction shown in the app under "Take a clear photo showing:".
+    # (Gemini doesn't use it; the expected activity comes from the habit name,
+    # see HABIT_ACTIVITY in ai_verification.py.)
+    ai_label: str
 
 
 class HabitLog(SQLModel, table=True):
@@ -40,8 +43,11 @@ class HabitLog(SQLModel, table=True):
     completed_date: date = Field(default_factory=today_ksa)
     points_earned: int
     verification_status: str = Field(default="pending")
-    predicted_label: Optional[str] = None
-    confidence: Optional[float] = None
+    predicted_label: Optional[str] = None   # the activity the AI detected, e.g. "walking"
+    confidence: Optional[float] = None      # unused with Gemini (kept for old rows)
+    # Why the AI accepted/rejected the photo, e.g. "high, activity_in_progress: Feet walking on a sidewalk."
+    # Existing databases get this column automatically at startup (see database.py).
+    ai_reason: Optional[str] = None
 
 
 class Avatar(SQLModel, table=True):
