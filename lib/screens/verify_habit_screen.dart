@@ -98,7 +98,7 @@ class _VerifyHabitScreenState extends State<VerifyHabitScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
+       iconTheme: IconThemeData(color: AppColors.textDark),
       ),
       body: SafeArea(
         child: ListView(

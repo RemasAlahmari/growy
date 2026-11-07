@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/motion/motion.dart';
 import '../theme/app_theme.dart';
+import 'add_habits_screen.dart';
 
 /// Habits tab: a calendar of verified completions and the history for the
 /// selected day. Every entry was verified with a photo taken in the app;
@@ -94,9 +95,10 @@ class _HabitsScreenState extends State<HabitsScreen> {
     return _month.year == now.year && _month.month == now.month;
   }
 
-  void _comingSoon(String what) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$what will open here once it is connected.')),
+  // "Manage" and "+" both open "My habits" (pick/unpick habits).
+  Future<void> _openAddHabits() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AddHabitScreen()),
     );
   }
 
@@ -205,8 +207,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
         const _BackToHome(),
         Expanded(child: Text('My Habits', style: _GrowyText.screenTitle)),
         TextButton(
-          onPressed:
-              widget.onManageHabits ?? () => _comingSoon('Manage habits'),
+          onPressed: widget.onManageHabits ?? _openAddHabits,
           style: TextButton.styleFrom(foregroundColor: _GrowyColors.primary),
           child: Text(
             'Manage',
@@ -223,7 +224,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
           child: IconButton(
             tooltip: 'Add habit',
             icon: const Icon(Icons.add_rounded, color: Colors.white),
-            onPressed: widget.onAddHabit ?? () => _comingSoon('Create habit'),
+            onPressed: widget.onAddHabit ?? _openAddHabits,
           ),
         ),
       ],

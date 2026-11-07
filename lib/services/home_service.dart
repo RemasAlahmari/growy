@@ -14,6 +14,7 @@ class UserProfile {
     required this.currentLevel,
     required this.streakDays,
     required this.todayPoints,
+    required this.gender, 
   });
 
   final String username;
@@ -21,6 +22,7 @@ class UserProfile {
   final int currentLevel;
   final int streakDays;
   final int todayPoints;
+  final String? gender;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
@@ -29,10 +31,33 @@ class UserProfile {
       currentLevel: (json['current_level'] as num? ?? 0).toInt(),
       streakDays: (json['streak_days'] as num? ?? 0).toInt(),
       todayPoints: (json['today_points'] as num? ?? 0).toInt(),
+      gender: json['gender'] as String?, 
     );
   }
 }
+/// A habit from GET /habits/today, plus its category ("Study" or "Health").
+class HabitEntry {
+  const HabitEntry({required this.habit, required this.category});
 
+  final HabitSummary habit;
+  final String category;
+}
+
+/// A group the user has joined (from GET /groups/mine).
+class JoinedGroup {
+  const JoinedGroup({
+    required this.id,
+    required this.name,
+    required this.category,
+  });
+
+  final String id;
+  final String name;
+
+  /// "Study" or "Health". Every habit with this category is one the
+  /// group's members need to do each day.
+  final String category;
+}
 /// Loads everything the Home screen shows from the backend.
 class HomeService {
   static const Duration _timeout = Duration(seconds: 10);
@@ -66,7 +91,15 @@ class HomeService {
   }
 
   /// GET /habits/today -> each habit with completed_today and streak for this user
+    /// GET /habits/today -> each habit with completed_today and streak.
   Future<List<HabitSummary>> getTodayHabits() async {
+    final entries = await getHabitCatalog();
+    return entries.map((e) => e.habit).toList();
+  }
+
+  /// Same request as [getTodayHabits], but keeps each habit's category so
+  /// Home can match habits to the user's groups.
+  Future<List<HabitEntry>> getHabitCatalog() async {
     final response = await http
         .get(
           Uri.parse('${AuthService.backendUrl}/habits/today'),
@@ -83,15 +116,69 @@ class HomeService {
     final list = jsonDecode(response.body) as List<dynamic>;
     return list.map((item) {
       final json = item as Map<String, dynamic>;
-      return HabitSummary(
-        id: json['id'].toString(),
-        name: json['name'] as String,
-        // The photo instruction shown on the verify screen
-        category: json['ai_label'] as String? ?? '',
-        xpValue: (json['points'] as num).toInt(),
-        completedToday: json['completed_today'] as bool? ?? false,
-        streak: (json['streak'] as num? ?? 0).toInt(),
+      return HabitEntry(
+        category: _habitCategory(json),
+        habit: HabitSummary(
+          id: json['id'].toString(),
+          name: json['name'] as String,
+          // The photo instruction shown on the verify screen
+          category: json['ai_label'] as String? ?? '',
+          xpValue: (json['points'] as num).toInt(),
+          completedToday: json['completed_today'] as bool? ?? false,
+          streak: (json['streak'] as num? ?? 0).toInt(),
+        ),
       );
     }).toList();
+  }
+
+  /// GET /groups/mine -> the groups this user has joined.
+  Future<List<JoinedGroup>> getMyGroups() async {
+    final response = await http
+        .get(
+          Uri.parse('${AuthService.backendUrl}/groups/mine'),
+          headers: await _headers(),
+        )
+        .timeout(_timeout);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to load groups (${response.statusCode}): ${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    final list = decoded is Map<String, dynamic>
+        ? (decoded['groups'] as List<dynamic>? ?? const [])
+        : decoded as List<dynamic>;
+    return list.map((item) {
+      final json = item as Map<String, dynamic>;
+      return JoinedGroup(
+        id: json['id'].toString(),
+        name: (json['room_name'] ?? json['name'] ?? '') as String,
+        category: normalizeCategory(json['category']) ?? 'Health',
+      );
+    }).toList();
+  }
+
+  /// "study"/"Study" -> "Study", "health"/"Health" -> "Health", else null.
+  static String? normalizeCategory(Object? value) {
+    final text = (value ?? '').toString().trim().toLowerCase();
+    if (text == 'study') return 'Study';
+    if (text == 'health') return 'Health';
+    return null;
+  }
+
+  /// Uses the backend's "category" field. If the backend doesn't send one,
+  /// guesses from the habit's name and photo label.
+  static String _habitCategory(Map<String, dynamic> json) {
+    final fromBackend =
+        normalizeCategory(json['category'] ?? json['habit_category']);
+    if (fromBackend != null) return fromBackend;
+
+    final text = '${json['name'] ?? ''} ${json['ai_label'] ?? ''}'.toLowerCase();
+    const studyWords = [
+      'study', 'read', 'book', 'notes', 'homework', 'learn', 'revis', 'desk',
+    ];
+    return studyWords.any(text.contains) ? 'Study' : 'Health';
   }
 }

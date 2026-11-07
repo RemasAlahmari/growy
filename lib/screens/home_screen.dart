@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/motion/growy_level_up_animation.dart';
 import '../core/motion/motion.dart';
+import 'add_habits_screen.dart';
 import 'avatar_customizer_screen.dart';
 import 'verify_habit_screen.dart';
 import 'groups_screen.dart';
@@ -14,6 +15,7 @@ import '../models/habit_summary.dart';
 import '../services/avatar_gender_store.dart';
 import '../services/avatar_service.dart';
 import '../services/home_service.dart';
+import '../services/my_habits_store.dart';
 import '../theme/app_theme.dart';
 import '../utils/avatar_stage.dart';
 import '../widgets/character_preview.dart';
@@ -50,9 +52,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // Debug only: which evolution the long-press test plays next (1→2, 2→3, 3→4).
   int _debugNextFrom = 1;
 
-  // Data from the backend (GET /users/me and GET /habits/today)
+  // Data from the backend (GET /users/me, GET /habits/today, GET /groups/mine)
   UserProfile? _profile;
-  List<HabitSummary> _habits = [];
+
+  // Today's list: the user's own habits + habits their groups need,
+  // each habit once, still-to-do first.
+  List<_TodayItem> _items = [];
   bool _isLoading = true;
   String? _error;
 
@@ -83,9 +88,15 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<Object?>([
         _homeService.getMe(),
-        _homeService.getTodayHabits(),
+        _homeService.getHabitCatalog(),
+        // Groups failing (e.g. older backend) shouldn't break Home.
+        _homeService.getMyGroups().catchError((Object e) {
+          debugPrint('Could not load groups: $e');
+          return <JoinedGroup>[];
+        }),
+        MyHabitsStore.load(),
       ]);
       if (!mounted) return;
 
@@ -95,7 +106,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _profile = results[0] as UserProfile;
-        _habits = results[1] as List<HabitSummary>;
+        _items = _buildTodayList(
+          results[1] as List<HabitEntry>,
+          results[3] as Set<String>?,
+          results[2] as List<JoinedGroup>,
+        );
         _isLoading = false;
       });
       _loadGender();
@@ -113,6 +128,42 @@ class _HomeScreenState extends State<HomeScreen> {
         'Could not load your data. Check your connection and try again.';
       });
     }
+  }
+
+  // A habit is on today's list if the user added it (or never chose, which
+  // means all habits) OR one of their groups needs it (same category as the
+  // group). A habit in both appears once, so one photo counts for both.
+  List<_TodayItem> _buildTodayList(
+    List<HabitEntry> catalog,
+    Set<String>? myHabitIds,
+    List<JoinedGroup> groups,
+  ) {
+    final todo = <_TodayItem>[];
+    final done = <_TodayItem>[];
+    for (final entry in catalog) {
+      final isPersonal = myHabitIds == null || myHabitIds.contains(entry.habit.id);
+      final groupNames = groups
+          .where((g) => g.category == entry.category)
+          .map((g) => g.name)
+          .toList();
+      if (!isPersonal && groupNames.isEmpty) continue;
+      final item = _TodayItem(
+        habit: entry.habit,
+        isPersonal: isPersonal,
+        groupNames: groupNames,
+      );
+      (entry.habit.completedToday ? done : todo).add(item);
+    }
+    return [...todo, ...done];
+  }
+
+  // Opens "My habits", then reloads Home if the user saved a change.
+  Future<void> _openAddHabits() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const AddHabitScreen()),
+    );
+    if (changed == true && mounted) _loadHomeData();
   }
 
   // Level went up. If the character changes (1→2, 2→3, 3→4), the avatar
@@ -221,10 +272,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // The level comes from the backend (current_level, 0–4).
+  // The level comes from the backend (current_level, 1–4).
   // These floors match the backend and are only used for the progress bar:
-  // 0–99 -> Level 0, 100–499 -> 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max)
-  static const List<int> _levelFloors = [0, 100, 500, 1500, 3000];
+  // 0–499 -> Level 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max).
+  // Index 0 is unused.
+  static const List<int> _levelFloors = [0, 0, 500, 1500, 3000];
   static const int _maxLevel = 4;
 
   int get _level {
@@ -268,7 +320,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 Expanded(child: _buildBody()),
-                const _BottomNav(),
+                // Reload when coming back from Groups/Habits/Me, in case the
+                // user joined or left a group or changed their habits.
+                _BottomNav(onReturn: _loadHomeData),
               ],
             ),
           ),
@@ -331,8 +385,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final habits = _habits;
-    final doneCount = habits.where((h) => h.completedToday).length;
+    final items = _items;
+    final doneCount = items.where((i) => i.habit.completedToday).length;
 
     return RefreshIndicator(
       // Pull down to reload points, streak, and habits
@@ -508,29 +562,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.textDark,
                 ),
               ),
-              Text(
-                '$doneCount/${habits.length} Done',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: _secondaryText,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '$doneCount/${items.length} Done',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _secondaryText,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Add habits',
+                    onPressed: _openAddHabits,
+                    icon: Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          for (var i = 0; i < habits.length; i++)
+          const SizedBox(height: 4),
+          if (items.isEmpty)
+            _NoHabitsCard(onAdd: _openAddHabits),
+          for (var i = 0; i < items.length; i++)
             Padding(
-              key: ValueKey(habits[i].id),
+              key: ValueKey(items[i].habit.id),
               padding: const EdgeInsets.only(bottom: 10),
               child: GrowySlideIn(
                 index: i,
                 baseDelay: const Duration(milliseconds: 200),
-                child: GrowyPressEffect(
-                  child: HabitCard(
-                    habit: habits[i],
-                    onTap: () => _openVerification(habits[i]),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GrowyPressEffect(
+                      child: HabitCard(
+                        habit: items[i].habit,
+                        onTap: () => _openVerification(items[i].habit),
+                      ),
+                    ),
+                    _SourceTags(item: items[i]),
+                  ],
                 ),
               ),
             ),
@@ -559,6 +633,108 @@ class _HomeScreenState extends State<HomeScreen> {
       'DEC',
     ];
     return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
+  }
+}
+
+/// One habit on today's list and where it comes from.
+class _TodayItem {
+  const _TodayItem({
+    required this.habit,
+    required this.isPersonal,
+    required this.groupNames,
+  });
+
+  final HabitSummary habit;
+
+  /// The user added it themselves (in "My habits").
+  final bool isPersonal;
+
+  /// Joined groups that need this habit today.
+  final List<String> groupNames;
+}
+
+/// Small chips under a habit card: "Personal" and/or the group names.
+class _SourceTags extends StatelessWidget {
+  const _SourceTags({required this.item});
+
+  final _TodayItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      if (item.isPersonal)
+        _chip(Icons.person_rounded, 'Personal', AppColors.primary),
+      for (final name in item.groupNames)
+        _chip(Icons.groups_rounded, name, GrowyPalette.secondaryDeep),
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 6),
+      child: Wrap(spacing: 6, runSpacing: 4, children: chips),
+    );
+  }
+
+  Widget _chip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the user removed every habit and isn't in any group.
+class _NoHabitsCard extends StatelessWidget {
+  const _NoHabitsCard({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GrowyPalette.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'No habits for today yet',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Add habits or join a group to get started.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(fontSize: 12, color: _secondaryText),
+          ),
+          TextButton(onPressed: onAdd, child: const Text('Add habits')),
+        ],
+      ),
+    );
   }
 }
 
@@ -607,10 +783,14 @@ class _StatCard extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav();
+  const _BottomNav({required this.onReturn});
 
-  void _open(BuildContext context, Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  /// Called when the user comes back to Home from another tab.
+  final VoidCallback onReturn;
+
+  Future<void> _open(BuildContext context, Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    onReturn();
   }
 
   @override
