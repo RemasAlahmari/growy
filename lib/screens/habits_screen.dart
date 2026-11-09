@@ -7,8 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/motion/motion.dart';
+import '../models/habit_summary.dart';
+import '../services/api_client.dart';
+import '../services/home_service.dart';
 import '../theme/app_theme.dart';
 import 'add_habits_screen.dart';
+import 'verify_habit_screen.dart';
 
 /// Habits tab: a calendar of verified completions and the history for the
 /// selected day. Every entry was verified with a photo taken in the app;
@@ -66,7 +70,8 @@ class _HabitsScreenState extends State<HabitsScreen> {
       final history = await _habitsData.getMonthHistory(month);
       if (!mounted) return;
       setState(() => _cache[_key(month)] = history);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Could not load habit history: $e');
       if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -100,6 +105,29 @@ class _HabitsScreenState extends State<HabitsScreen> {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const AddHabitScreen()),
     );
+  }
+
+  /// "Verify a habit" (empty history): lists today's habits from the backend;
+  /// picking one opens photo verification, then this month is reloaded.
+  Future<void> _openHabitPicker() async {
+    final habit = await showModalBottomSheet<HabitSummary>(
+      context: context,
+      backgroundColor: _GrowyColors.background,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(_GrowyRadius.card),
+        ),
+      ),
+      builder: (_) => const _HabitPickerSheet(),
+    );
+    if (habit == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => VerifyHabitScreen(habit: habit)),
+    );
+    if (!mounted) return;
+    await _loadMonth(_month, force: true);
   }
 
   void _openPhoto(_HabitLog log) {
@@ -263,13 +291,130 @@ class _HabitsScreenState extends State<HabitsScreen> {
         icon: Icons.photo_camera_outlined,
         message: 'Your completed habits will appear here.',
         detail: 'Verify a habit with a photo to start your history.',
-        buttonLabel: widget.onGoVerify == null ? null : 'Verify a habit',
-        onPressed: widget.onGoVerify,
+        buttonLabel: 'Verify a habit',
+        onPressed: widget.onGoVerify ?? _openHabitPicker,
       );
     }
     return const _EmptyState(
       icon: Icons.event_available_outlined,
       message: 'No habits completed on this day.',
+    );
+  }
+}
+
+/// Bottom sheet with today's habits (GET /habits/today). Returns the habit
+/// the user tapped, or null. Habits already done today can't be picked.
+class _HabitPickerSheet extends StatefulWidget {
+  const _HabitPickerSheet();
+
+  @override
+  State<_HabitPickerSheet> createState() => _HabitPickerSheetState();
+}
+
+class _HabitPickerSheetState extends State<_HabitPickerSheet> {
+  final HomeService _homeService = HomeService();
+  List<HabitSummary>? _habits;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final habits = await _homeService.getTodayHabits();
+      if (mounted) setState(() => _habits = habits);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      debugPrint('Could not load habits: $e');
+      if (mounted) setState(() => _error = 'Could not load your habits.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final habits = _habits;
+    Widget body;
+    if (_error != null) {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_error!, textAlign: TextAlign.center, style: _GrowyText.body),
+          const SizedBox(height: _GrowySpacing.md),
+          TextButton(onPressed: _load, child: const Text('Try again')),
+        ],
+      );
+    } else if (habits == null) {
+      body = const Padding(
+        padding: EdgeInsets.all(_GrowySpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (habits.isEmpty) {
+      body = Text(
+        'No habits yet.',
+        textAlign: TextAlign.center,
+        style: _GrowyText.body,
+      );
+    } else {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final h in habits)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: _IconCircle(
+                icon: h.completedToday
+                    ? Icons.check_rounded
+                    : Icons.photo_camera_outlined,
+                size: 40,
+              ),
+              title: Text(h.name, style: _GrowyText.cardTitle),
+              subtitle: Text(
+                h.completedToday
+                    ? 'Done today · ${h.streak} day streak'
+                    : '+${h.xpValue} XP · ${h.streak} day streak',
+                style: _GrowyText.caption,
+              ),
+              trailing: h.completedToday
+                  ? null
+                  : Icon(
+                      Icons.chevron_right_rounded,
+                      color: _GrowyColors.textSecondary,
+                    ),
+              enabled: !h.completedToday,
+              onTap: () => Navigator.of(context).pop(h),
+            ),
+        ],
+      );
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _GrowySpacing.screen,
+          0,
+          _GrowySpacing.screen,
+          _GrowySpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text("Today's habits", style: _GrowyText.sectionTitle),
+            const SizedBox(height: _GrowySpacing.xs),
+            Text(
+              'Pick a habit to verify it with a photo.',
+              style: _GrowyText.caption,
+            ),
+            const SizedBox(height: _GrowySpacing.md),
+            Flexible(child: SingleChildScrollView(child: body)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1129,7 +1274,8 @@ class _HabitLog {
       category: (json['category'] ?? '') as String,
       completedAt: DateTime.parse(json['completed_at'] as String).toLocal(),
       pointsEarned: (json['points_earned'] ?? 0) as int,
-      imageUrl: (json['image_url'] ?? '') as String,
+      // The backend sends "/photos/<token>.jpg" (or "" for older logs).
+      imageUrl: ApiClient.absoluteUrl((json['image_url'] ?? '') as String) ?? '',
     );
   }
 }
@@ -1196,61 +1342,21 @@ class _HabitCategories {
       : 'Your workout, running shoes or healthy meal';
 }
 
-// ───────────────────────────────────────────────────────────── sample data
-// Sample history so the page works before the backend is ready.
-// TODO(backend): replace getMonthHistory with GET /habit-logs?month=YYYY-MM.
+// ───────────────────────────────────────────────────────────── backend
+// getMonthHistory → GET /habit-logs?month=YYYY-MM (this user's verified completions).
+// Each verified log has its photo (a 640 px copy kept by the backend); logs saved
+// before photos were stored show a placeholder.
 
 class _HabitsData {
-  final List<_HabitLog> _logs = [];
-
-  _HabitsData() {
-    const habits = [
-      ['h1', 'Read 20 Pages', 'Study', 30],
-      ['h2', 'Morning Run', 'Health', 30],
-      ['h3', 'Study Session', 'Study', 40],
-      ['h4', 'Drink 8 Glasses of Water', 'Health', 30],
-      ['h5', 'Healthy Breakfast', 'Health', 30],
-    ];
-    const pattern = [2, 1, 3, 0, 2, 1, 0, 3, 1, 2, 0, 1];
-    final now = DateTime.now();
-    var nextId = 1;
-    for (var back = 60; back >= 0; back--) {
-      final day = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: back));
-      final count = pattern[(day.day + day.month) % pattern.length];
-      for (var i = 0; i < count; i++) {
-        final h = habits[(day.day + i * 2) % habits.length];
-        final time = day.add(Duration(hours: 7 + i * 4, minutes: 14 + i * 7));
-        if (time.isAfter(now)) continue;
-        final id = 'log${nextId++}';
-        _logs.add(
-          _HabitLog(
-            id: id,
-            habitId: h[0] as String,
-            habitName: h[1] as String,
-            category: h[2] as String,
-            completedAt: time,
-            pointsEarned: h[3] as int,
-            imageUrl: 'https://picsum.photos/seed/growy-$id/600/600',
-          ),
-        );
-      }
-    }
-  }
-
   Future<_MonthHistory> getMonthHistory(DateTime month) async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    final key = '${month.year}-${month.month.toString().padLeft(2, '0')}';
+    final list =
+        await ApiClient.getJson('/habit-logs', query: {'month': key})
+            as List<dynamic>;
     return _MonthHistory(
       month: month,
-      logs: _logs
-          .where(
-            (l) =>
-                l.completedAt.year == month.year &&
-                l.completedAt.month == month.month,
-          )
+      logs: list
+          .map((item) => _HabitLog.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }

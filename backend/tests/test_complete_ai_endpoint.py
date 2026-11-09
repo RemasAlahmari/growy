@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 import ai_verification
 import main
-from conftest import get_user, habit_id, logs, make_jpeg, upload
+from conftest import REAL_ANALYZE_PHOTO, get_user, habit_id, logs, make_jpeg, upload
 from models import HabitLog
 
 FLUTTER_KEYS = {"verification_status", "predicted_label", "confidence", "points_earned"}
@@ -21,13 +21,15 @@ def test_walking_photo_is_verified_and_awards_points(client, db, fake_ai):
     assert body["expected_activity"] == "walking"
     assert body["points_earned"] == 10
     assert body["total_points"] == 10
-    assert body["current_level"] == 1
+    assert body["current_level"] == 0
+    assert body["leveled_up"] is False
+    assert body["attempts_remaining"] == 3
     assert body["reason"] == "Feet walking on a sidewalk."
     assert body["confidence_level"] == "high"
     assert len(calls) == 1
 
     user = get_user(db)
-    assert user.total_points == 10 and user.current_level == 1
+    assert user.total_points == 10 and user.current_level == 0
     [log] = logs(db)
     assert log.verification_status == "verified"
     assert log.points_earned == 10
@@ -54,6 +56,7 @@ def test_level_is_recalculated(client, db, fake_ai):
     r = upload(client, habit_id(db, "Walking"))
     assert r.json()["total_points"] == 505
     assert r.json()["current_level"] == 2
+    assert r.json()["leveled_up"] is True
     assert get_user(db).current_level == 2
 
 
@@ -73,6 +76,7 @@ def test_object_only_is_rejected(client, db, fake_ai):
     r = upload(client, habit_id(db, "Reading"))
     _assert_rejected(r, db)
     assert "nobody" in r.json()["reason"]
+    assert r.json()["attempts_remaining"] == 2
 
 
 def test_wrong_activity_is_rejected(client, db, fake_ai):
@@ -164,6 +168,7 @@ def test_gemini_failure_is_503_and_saves_nothing(client, db, fake_ai):
 
 
 def test_missing_api_key_is_503(client, db, monkeypatch):
+    monkeypatch.setattr(ai_verification, "analyze_photo", REAL_ANALYZE_PHOTO)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setattr(ai_verification, "_client", None)
     r = upload(client, habit_id(db, "Walking"))
@@ -227,3 +232,24 @@ def test_health_reports_ai_config_without_leaking_key(client, monkeypatch):
     body = client.get("/health").json()
     assert body["ai_configured"] is True
     assert "secret-test-key" not in str(body)
+
+
+def test_ai_outage_does_not_use_up_an_attempt(client, db, fake_ai):
+    hid = habit_id(db, "Walking")
+    for _ in range(3):
+        fake_ai(error=ai_verification.AIServiceError("down"))
+        assert upload(client, hid).status_code == 503
+    fake_ai("walking")
+    r = upload(client, hid)
+    assert r.status_code == 200
+    assert r.json()["verification_status"] == "verified"
+
+
+def test_three_rejections_then_429(client, db, fake_ai):
+    hid = habit_id(db, "Walking")
+    fake_ai("walking", "object_only", "high")
+    remaining = [upload(client, hid).json()["attempts_remaining"] for _ in range(3)]
+    assert remaining == [2, 1, 0]
+    r = upload(client, hid)
+    assert r.status_code == 429
+    assert len(logs(db)) == 3

@@ -11,3 +11,16 @@ def count_streak(done_dates: set, today: date) -> int:
         streak += 1
         day -= timedelta(days=1)
     return streak
+
+
+def longest_streak(done_dates: set) -> int:
+    # The most consecutive days ever in done_dates (shown on the Me page).
+    best = 0
+    for day in done_dates:
+        if day - timedelta(days=1) in done_dates:
+            continue  # not the first day of a run
+        length = 1
+        while day + timedelta(days=length) in done_dates:
+            length += 1
+        best = max(best, length)
+    return best

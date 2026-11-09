@@ -1,12 +1,13 @@
 import 'dart:convert';
- 
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
- 
-import 'auth_service.dart';
- 
+
+import 'api_client.dart';
+
 /// What POST /habits/{id}/complete/ai returns.
 class VerificationResult {
   const VerificationResult({
@@ -16,6 +17,10 @@ class VerificationResult {
     this.confidenceLevel,
     this.reason,
     this.pointsEarned = 0,
+    this.totalPoints,
+    this.currentLevel,
+    this.leveledUp = false,
+    this.attemptsRemaining,
   });
 
   final String status; // "verified" or "rejected"
@@ -24,6 +29,18 @@ class VerificationResult {
   final String? confidenceLevel; // "high", "medium" or "low"
   final String? reason; // one sentence from the AI explaining its decision
   final int pointsEarned;
+
+  /// The user's XP total after this attempt.
+  final int? totalPoints;
+
+  /// The user's level after this attempt (0–4), decided by the backend.
+  final int? currentLevel;
+
+  /// True when this verification moved the user up a level.
+  final bool leveledUp;
+
+  /// Rejected attempts the user still has today (null if the backend didn't send it).
+  final int? attemptsRemaining;
 
   bool get isVerified => status == 'verified';
 
@@ -35,23 +52,30 @@ class VerificationResult {
       confidenceLevel: json['confidence_level'] as String?,
       reason: json['reason'] as String?,
       pointsEarned: (json['points_earned'] as num? ?? 0).toInt(),
+      totalPoints: (json['total_points'] as num?)?.toInt(),
+      currentLevel: (json['current_level'] as num?)?.toInt(),
+      leveledUp: json['leveled_up'] as bool? ?? false,
+      attemptsRemaining: (json['attempts_remaining'] as num?)?.toInt(),
     );
   }
 }
 
 /// An error with a message that is safe to show to the user.
 class VerificationException implements Exception {
-  VerificationException(this.message);
+  VerificationException(this.message, {this.outOfAttempts = false});
   final String message;
- 
+
+  /// True when the backend refused because today's attempts are used up (HTTP 429).
+  final bool outOfAttempts;
+
   @override
   String toString() => message;
 }
- 
+
 class VerificationService {
   // The AI usually answers in a few seconds; the backend gives up after 30 s.
   static const Duration _timeout = Duration(seconds: 60);
- 
+
   /// Uploads the photo as multipart form-data, field name "file".
   Future<VerificationResult> submitPhoto({
     required String habitId,
@@ -62,13 +86,11 @@ class VerificationService {
       throw VerificationException('You are not logged in.');
     }
     final token = await user.getIdToken();
- 
-    final uri = Uri.parse(
-      '${AuthService.backendUrl}/habits/$habitId/complete/ai',
-    );
+
+    final uri = ApiClient.uri('/habits/$habitId/complete/ai');
     final bytes = await photo.readAsBytes();
     final isPng = photo.name.toLowerCase().endsWith('.png');
- 
+
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $token'
       ..files.add(
@@ -79,17 +101,18 @@ class VerificationService {
           contentType: MediaType('image', isPng ? 'png' : 'jpeg'),
         ),
       );
- 
+
     final http.Response response;
     try {
       final streamed = await request.send().timeout(_timeout);
       response = await http.Response.fromStream(streamed);
     } catch (e) {
+      debugPrint('Photo upload to $uri failed: $e');
       throw VerificationException(
         'Could not reach the server. Check your connection and try again.',
       );
     }
- 
+
     if (response.statusCode == 200) {
       return VerificationResult.fromJson(
         jsonDecode(response.body) as Map<String, dynamic>,
@@ -100,6 +123,12 @@ class VerificationService {
     }
     if (response.statusCode == 413 || response.statusCode == 415) {
       throw VerificationException('Please use a JPG or PNG photo under 5 MB.');
+    }
+    if (response.statusCode == 429) {
+      throw VerificationException(
+        "You've used all your attempts for this habit today. Try again tomorrow.",
+        outOfAttempts: true,
+      );
     }
     if (response.statusCode == 503) {
       throw VerificationException(

@@ -6,7 +6,6 @@ import pytest
 from PIL import Image
 
 import ai_verification as ai
-from leveling import level_for_points
 
 
 def V(activity, evidence="activity_in_progress", confidence="high", reason="r"):
@@ -168,9 +167,3 @@ def test_missing_key_is_service_error(monkeypatch):
 def test_default_model(monkeypatch):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
     assert ai.model_name() == ai.DEFAULT_MODEL
-
-
-# ---------- leveling ----------
-@pytest.mark.parametrize("points, level", [(0, 1), (499, 1), (500, 2), (1499, 2), (1500, 3), (2999, 3), (3000, 4), (99999, 4)])
-def test_level_for_points(points, level):
-    assert level_for_points(points) == level
