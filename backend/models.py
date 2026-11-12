@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime, date, timezone, timedelta
-from sqlalchemy import BigInteger
+from sqlalchemy import BigInteger, LargeBinary, UniqueConstraint
 from sqlmodel import SQLModel, Field
 
 # توقيت السعودية (UTC+3)
@@ -22,7 +22,13 @@ class User(SQLModel, table=True):
     email: str
     total_points: int = Field(default=0)
     current_level: int = Field(default=0)
+    # Not used: the streak is calculated from HabitLog on every request (see get_user_streak).
     streak_days: int = Field(default=0)
+    # "male" / "female", chosen on Sign Up. Decides the boy/girl avatar.
+    # Existing databases get these two columns automatically at startup (see database.py).
+    gender: Optional[str] = None
+    # Name shown on the Me page (Edit Profile). Falls back to username when empty.
+    display_name: Optional[str] = None
 
 
 class Habit(SQLModel, table=True):
@@ -61,3 +67,54 @@ class Avatar(SQLModel, table=True):
     shirt: int = Field(default=0xFFFF8FA3, sa_type=BigInteger)
     pants: int = Field(default=0xFF3A506B, sa_type=BigInteger)
     shoes: int = Field(default=0xFFFFFFFF, sa_type=BigInteger)
+
+
+# ------------------------------------------------------------------
+# Groups ("rooms"). New tables: created automatically at startup.
+# ------------------------------------------------------------------
+class Room(SQLModel, table=True):
+    # A group users can join. The app has no "create group" screen, so the
+    # default groups are added at startup (see seed_groups.py).
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    description: str = ""
+    category: str = "Health"              # "Study" or "Health"
+    icon_key: str = "run"                 # "run", "book", "water" or "mind" (picks the app icon)
+    code: str = Field(unique=True, index=True)  # invite code, stored in UPPERCASE
+    # Optional monthly group goal: "earn goal_target XP together this month".
+    goal_title: Optional[str] = None
+    goal_target: Optional[int] = None
+    created_at: datetime = Field(default_factory=now_utc)
+
+
+class RoomMember(SQLModel, table=True):
+    # A user in a group. Only XP earned after joined_at counts in that group.
+    __table_args__ = (UniqueConstraint("room_id", "user_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    room_id: int = Field(foreign_key="room.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    joined_at: datetime = Field(default_factory=now_utc)
+
+
+class RoomDismissal(SQLModel, table=True):
+    # A group the user hid from "Groups to join" ("Not interested").
+    __table_args__ = (UniqueConstraint("room_id", "user_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    room_id: int = Field(foreign_key="room.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+
+
+# ------------------------------------------------------------------
+# Photos (stored in the database, no paid storage service needed)
+# ------------------------------------------------------------------
+class Photo(SQLModel, table=True):
+    # A small JPEG (max 640 px): a verified habit photo or a profile photo.
+    # Served at GET /photos/{token}.jpg. The token is long and random, so the
+    # address can't be guessed; anyone who has the address can open the photo.
+    id: Optional[int] = Field(default=None, primary_key=True)
+    token: str = Field(unique=True, index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    kind: str                              # "verification" or "profile"
+    habit_log_id: Optional[int] = Field(default=None, foreign_key="habitlog.id", index=True)
+    data: bytes = Field(sa_type=LargeBinary)
+    created_at: datetime = Field(default_factory=now_utc)

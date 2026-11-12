@@ -53,3 +53,4 @@ google-services.json
 firebase.json
 lib/firebase_options.dart
 .venv/
+backend/growy_local.db

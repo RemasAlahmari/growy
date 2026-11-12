@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
+import 'screens/home_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
@@ -77,7 +79,36 @@ class _GrowyAppState extends State<GrowyApp> with WidgetsBindingObserver {
       theme: GrowyThemes.light,
       darkTheme: GrowyThemes.dark,
       themeMode: themeController.value,
-      home: const WelcomeScreen(),
+      home: const _StartScreen(),
+    );
+  }
+}
+
+/// Opens Home when the user is still logged in from last time (Firebase keeps
+/// the login on the device), otherwise the Welcome screen.
+class _StartScreen extends StatefulWidget {
+  const _StartScreen();
+
+  @override
+  State<_StartScreen> createState() => _StartScreenState();
+}
+
+class _StartScreenState extends State<_StartScreen> {
+  // Created once: the theme switch rebuilds every screen, and a new Future
+  // here would flash the spinner and rebuild Home from scratch.
+  // The first value tells us whether a saved login was restored.
+  final Future<User?> _savedLogin = FirebaseAuth.instance.authStateChanges().first;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<User?>(
+      future: _savedLogin,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return snapshot.data != null ? const HomeScreen() : const WelcomeScreen();
+      },
     );
   }
 }

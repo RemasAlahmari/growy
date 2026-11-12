@@ -10,7 +10,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/motion/motion.dart';
 import '../models/character_config.dart';
+import '../services/api_client.dart';
+import '../services/avatar_gender_store.dart';
+import '../services/avatar_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/avatar_stage.dart';
 import '../theme/theme_controller.dart';
 import 'avatar_customizer_screen.dart';
 import 'login_screen.dart';
@@ -27,8 +31,10 @@ class MeScreen extends StatefulWidget {
 class _MeScreenState extends State<MeScreen> {
   _UserProfile? _user;
 
-  /// The avatar look. TODO: load and save it the same way your Home screen does.
+  /// The avatar look and boy/girl, loaded the same way as on Home
+  /// (GET /users/me/avatar), so Customize starts from the saved avatar.
   CharacterConfig _avatarConfig = CharacterConfig.defaultConfig();
+  AvatarGender _avatarGender = AvatarGender.girl;
   bool _failed = false;
 
   @override
@@ -46,18 +52,43 @@ class _MeScreenState extends State<MeScreen> {
           _failed = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Could not load profile: $e');
       if (mounted) setState(() => _failed = true);
+    }
+    _loadAvatar();
+  }
+
+  Future<void> _loadAvatar() async {
+    try {
+      final config = await AvatarService().getMyAvatar();
+      final gender = await AvatarGenderStore.resolve(
+        backendValue: _meData.gender,
+      );
+      if (!mounted) return;
+      setState(() {
+        _avatarConfig = config;
+        _avatarGender = gender;
+      });
+    } catch (e) {
+      debugPrint('Could not load saved avatar: $e');
     }
   }
 
   Future<void> _openCustomizer() async {
     final result = await Navigator.of(context).push<CharacterConfig>(
       MaterialPageRoute(
-        builder: (_) => AvatarCustomizerScreen(initialConfig: _avatarConfig),
+        builder: (_) => AvatarCustomizerScreen(
+          initialConfig: _avatarConfig,
+          initialGender: _avatarGender,
+          level: _user?.level ?? 0,
+        ),
       ),
     );
-    if (result != null && mounted) setState(() => _avatarConfig = result);
+    if (result != null && mounted) {
+      setState(() => _avatarConfig = result);
+      _loadAvatar(); // picks up a girl/boy switch
+    }
   }
 
   Future<void> _openEditProfile(_UserProfile user) async {
@@ -961,9 +992,11 @@ Future<_UserProfile?> _pickProfilePhoto(
   } catch (e) {
     debugPrint('Profile photo failed: $e');
     messenger.showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          "Couldn't update your photo. Check that Growy can access your photos.",
+          e is ApiException
+              ? e.message
+              : "Couldn't update your photo. Check that Growy can access your photos.",
         ),
       ),
     );
@@ -1776,7 +1809,7 @@ class _UserProfile {
       displayName: (json['display_name'] ?? json['username'] ?? '') as String,
       username: (json['username'] ?? '') as String,
       email: (json['email'] ?? '') as String,
-      photoUrl: json['profile_image_url'] as String?,
+      photoUrl: ApiClient.absoluteUrl(json['profile_image_url'] as String?),
       totalXp: (json['total_points'] ?? 0) as int,
       level: (json['current_level'] ?? 0) as int,
       xpIntoLevel: (json['xp_into_level'] ?? 0) as int,
@@ -1824,8 +1857,9 @@ class _AccountService {
 
   static Future<void> signOut() => _auth.signOut();
 
-  /// User-friendly message for a Firebase error.
+  /// User-friendly message for a Firebase or backend error.
   static String messageFor(Object error) {
+    if (error is ApiException) return error.message;
     if (error is FirebaseAuthException) {
       switch (error.code) {
         case 'wrong-password':
@@ -1850,98 +1884,68 @@ class _AccountService {
   }
 }
 
-/// Growy's level thresholds (same as the backend):
-/// 0–99 → 0, 100–499 → 1, 500–1499 → 2, 1500–2999 → 3, 3000+ → 4 (max).
-///
-/// The backend's `current_level` is the source of truth. These helpers only
-/// work out the progress bar ("950 / 1,500 XP") and the sample data.
-const List<int> _kLevelFloors = [0, 100, 500, 1500, 3000];
+// Levels: 0–99 XP → 0, 100–499 → 1, 500–1499 → 2, 1500–2999 → 3, 3000+ → 4 (max).
+// The backend calculates them (backend/leveling.py) and sends current_level,
+// xp_into_level and xp_for_next_level in GET /users/me.
 
-int get _kMaxLevel => _kLevelFloors.length - 1; // 4
-
-int _levelForXp(int totalXp) {
-  var level = 0;
-  for (var i = 0; i < _kLevelFloors.length; i++) {
-    if (totalXp >= _kLevelFloors[i]) level = i;
-  }
-  return level;
-}
-
-/// XP at which [level] starts.
-int _levelFloorXp(int level) => _kLevelFloors[level.clamp(0, _kMaxLevel)];
-
-/// XP needed to go from [level] to the next one, or null at max level.
-int? _xpNeededAfterLevel(int level) {
-  if (level >= _kMaxLevel) return null;
-  return _kLevelFloors[level + 1] - _kLevelFloors[level];
-}
-
-// ───────────────────────────────────────────────────────────── sample data
-// Sample profile so the page works before the backend is ready.
-// TODO(backend): getMe → GET /users/me, updateMe → PUT /users/me (409 = username taken),
-// uploadPhoto → POST /users/me/photo (multipart, returns profile_image_url),
-// removePhoto → DELETE /users/me/photo.
+// ───────────────────────────────────────────────────────────── backend
+// getMe → GET /users/me, updateMe → PUT /users/me (409 = username taken),
+// uploadPhoto → POST /users/me/photo, removePhoto → DELETE /users/me/photo.
+// The backend keeps a 640 px copy of the photo and returns profile_image_url.
 
 class _UsernameTakenException implements Exception {
   const _UsernameTakenException();
 }
 
 class _MeData {
-  static const Set<String> _taken = {'sara', 'admin', 'growy'};
-  late _UserProfile _user;
+  _UserProfile? _user;
 
-  _MeData() {
-    const totalXp = 2450;
-    final level = _levelForXp(totalXp);
-    final next = _xpNeededAfterLevel(level);
-    _user = _UserProfile(
-      id: 'me',
-      displayName: 'Zad',
-      username: 'zad',
-      email: _AccountService.currentEmail ?? 'zad@growy.app',
-      totalXp: totalXp,
-      level: level,
-      xpIntoLevel: totalXp - _levelFloorXp(level),
-      xpForNextLevel: next,
-      currentStreak: 15,
-      longestStreak: 21,
-      habitsCompleted: 86,
-      groupsJoined: 3,
-      photosVerified: 86,
-    );
-  }
+  /// 'male' / 'female' from the backend (used to pick the boy/girl avatar).
+  String? gender;
 
   Future<_UserProfile> getMe() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return _user;
+    final json = await ApiClient.getJson('/users/me') as Map<String, dynamic>;
+    return _remember(json);
   }
 
   Future<_UserProfile> updateMe({
     required String displayName,
     required String username,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    final clean = username.trim().toLowerCase();
-    if (clean != _user.username && _taken.contains(clean)) {
-      throw const _UsernameTakenException();
+    try {
+      final json = await ApiClient.putJson('/users/me', {
+        'display_name': displayName.trim(),
+        'username': username.trim(),
+      }) as Map<String, dynamic>;
+      return _remember(json);
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) throw const _UsernameTakenException();
+      rethrow;
     }
-    _user = _user.copyWith(displayName: displayName.trim(), username: clean);
-    return _user;
   }
 
-  /// Sample version keeps the picked bytes in memory. With the backend,
-  /// upload `photo` and use the returned `profile_image_url` (keep the
-  /// bytes too, so the new photo shows instantly without a download).
+  /// Uploads the photo; the picked bytes are kept too, so the new photo
+  /// shows instantly without downloading it again.
   Future<_UserProfile> uploadPhoto(XFile photo, Uint8List bytes) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _user = _user.copyWith(photoBytes: bytes);
-    return _user;
+    final json = await ApiClient.uploadImage(
+      '/users/me/photo',
+      bytes,
+      filename: photo.name.isEmpty ? 'profile.jpg' : photo.name,
+    ) as Map<String, dynamic>;
+    _user = _remember(json).copyWith(photoBytes: bytes);
+    return _user!;
   }
 
   Future<_UserProfile> removePhoto() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _user = _user.copyWith(clearPhoto: true);
-    return _user;
+    final json = await ApiClient.deleteJson('/users/me/photo')
+        as Map<String, dynamic>;
+    return _remember(json);
+  }
+
+  _UserProfile _remember(Map<String, dynamic> json) {
+    gender = json['gender'] as String?;
+    _user = _UserProfile.fromJson(json);
+    return _user!;
   }
 }
 

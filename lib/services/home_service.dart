@@ -1,10 +1,5 @@
-import 'dart:convert';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-
 import '../models/habit_summary.dart';
-import 'auth_service.dart';
+import 'api_client.dart';
 
 /// What GET /users/me returns, used by the Home header and stats.
 class UserProfile {
@@ -14,7 +9,7 @@ class UserProfile {
     required this.currentLevel,
     required this.streakDays,
     required this.todayPoints,
-    required this.gender, 
+    this.gender,
   });
 
   final String username;
@@ -22,6 +17,8 @@ class UserProfile {
   final int currentLevel;
   final int streakDays;
   final int todayPoints;
+
+  /// 'male' / 'female' (chosen on Sign Up), or null for older accounts.
   final String? gender;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -31,10 +28,11 @@ class UserProfile {
       currentLevel: (json['current_level'] as num? ?? 0).toInt(),
       streakDays: (json['streak_days'] as num? ?? 0).toInt(),
       todayPoints: (json['today_points'] as num? ?? 0).toInt(),
-      gender: json['gender'] as String?, 
+      gender: json['gender'] as String?,
     );
   }
 }
+
 /// A habit from GET /habits/today, plus its category ("Study" or "Health").
 class HabitEntry {
   const HabitEntry({required this.habit, required this.category});
@@ -95,72 +93,36 @@ class JoinedGroup {
     return words.any(habitName.contains);
   }
 }
+
 /// Loads everything the Home screen shows from the backend.
+/// Errors are thrown as [ApiException] with a message that can be shown as is.
 class HomeService {
-  static const Duration _timeout = Duration(seconds: 10);
-
-  Future<Map<String, String>> _headers() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('Not logged in');
-    }
-    final token = await user.getIdToken();
-    return {'Authorization': 'Bearer $token'};
-  }
-
-  /// GET /users/me -> username, total_points, streak_days, today_points
+  /// GET /users/me -> username, total_points, current_level, streak_days, today_points, gender
   Future<UserProfile> getMe() async {
-    final response = await http
-        .get(
-          Uri.parse('${AuthService.backendUrl}/users/me'),
-          headers: await _headers(),
-        )
-        .timeout(_timeout);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load profile (${response.statusCode}): ${response.body}',
-      );
-    }
-    return UserProfile.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    final json = await ApiClient.getJson('/users/me');
+    return UserProfile.fromJson(json as Map<String, dynamic>);
   }
 
   /// GET /habits/today -> each habit with completed_today and streak for this user
-    /// GET /habits/today -> each habit with completed_today and streak.
   Future<List<HabitSummary>> getTodayHabits() async {
     final entries = await getHabitCatalog();
     return entries.map((e) => e.habit).toList();
   }
 
   /// Same request as [getTodayHabits], but keeps each habit's category so
-  /// Home can match habits to the user's groups.
+  /// Home and "My habits" can match habits to the user's groups.
   Future<List<HabitEntry>> getHabitCatalog() async {
-    final response = await http
-        .get(
-          Uri.parse('${AuthService.backendUrl}/habits/today'),
-          headers: await _headers(),
-        )
-        .timeout(_timeout);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load habits (${response.statusCode}): ${response.body}',
-      );
-    }
-
-    final list = jsonDecode(response.body) as List<dynamic>;
+    final list = await ApiClient.getJson('/habits/today') as List<dynamic>;
     return list.map((item) {
       final json = item as Map<String, dynamic>;
       return HabitEntry(
         category: _habitCategory(json),
         habit: HabitSummary(
           id: json['id'].toString(),
-          name: json['name'] as String,
+          name: json['name'] as String? ?? '',
           // The photo instruction shown on the verify screen
           category: json['ai_label'] as String? ?? '',
-          xpValue: (json['points'] as num).toInt(),
+          xpValue: (json['points'] as num? ?? 0).toInt(),
           completedToday: json['completed_today'] as bool? ?? false,
           streak: (json['streak'] as num? ?? 0).toInt(),
         ),
@@ -170,20 +132,7 @@ class HomeService {
 
   /// GET /groups/mine -> the groups this user has joined.
   Future<List<JoinedGroup>> getMyGroups() async {
-    final response = await http
-        .get(
-          Uri.parse('${AuthService.backendUrl}/groups/mine'),
-          headers: await _headers(),
-        )
-        .timeout(_timeout);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load groups (${response.statusCode}): ${response.body}',
-      );
-    }
-
-    final decoded = jsonDecode(response.body);
+    final decoded = await ApiClient.getJson('/groups/mine');
     final list = decoded is Map<String, dynamic>
         ? (decoded['groups'] as List<dynamic>? ?? const [])
         : decoded as List<dynamic>;
@@ -206,8 +155,8 @@ class HomeService {
     return null;
   }
 
-  /// Uses the backend's "category" field. If the backend doesn't send one,
-  /// guesses from the habit's name and photo label.
+  /// Uses the backend's "category" field. If the backend doesn't send one
+  /// (older backend), guesses from the habit's name and photo label.
   static String _habitCategory(Map<String, dynamic> json) {
     final fromBackend =
         normalizeCategory(json['category'] ?? json['habit_category']);
