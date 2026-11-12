@@ -135,8 +135,13 @@ class _AvatarCustomizerScreenState extends State<AvatarCustomizerScreen> {
     try {
       // PUT /users/me/avatar with _config.toJson() (skin, hair, shirt, pants, shoes)
       await _avatarService.saveMyAvatar(_config);
-      // Boy/girl is remembered on this phone (the backend can't store it yet).
+      // Boy/girl is remembered on this phone and on the backend (other phones).
       await AvatarGenderStore.save(_gender);
+      try {
+        await _avatarService.saveGender(_gender);
+      } catch (e) {
+        debugPrint('Could not save gender on the backend: $e');
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Avatar saved!')));

@@ -3,7 +3,8 @@ Shared test setup. Run from the backend folder:  pytest -v
 
 - Uses an in-memory SQLite database (your Supabase data is never touched).
 - Skips Firebase: requests are treated as coming from a fake logged-in user.
-- Never calls Gemini: each test decides what the "AI" answers.
+- Never calls Gemini: API tests get a default "verified Reading photo" answer,
+  and a test can choose another answer with the fake_ai fixture.
 """
 import io
 import os
@@ -27,6 +28,9 @@ from models import Habit, HabitLog, User
 
 TEST_UID = "test-firebase-uid"
 
+# The real Gemini call, kept so a test can put it back (see test_missing_api_key_is_503).
+REAL_ANALYZE_PHOTO = ai_verification.analyze_photo
+
 
 @pytest.fixture()
 def engine():
@@ -48,10 +52,25 @@ def db(engine):
 
 
 @pytest.fixture()
-def client(db):
+def session(db):
+    # Same database session under the name the older tests use.
+    return db
+
+
+def _verdict(activity="reading", evidence="activity_in_progress", confidence="high",
+             reason="A person reading a book."):
+    return ai_verification.Verdict(
+        detected_activity=activity, evidence=evidence, confidence=confidence, reason=reason,
+    )
+
+
+@pytest.fixture()
+def client(db, monkeypatch):
     # The endpoint and the test share one session (pattern from the SQLModel docs)
     main.app.dependency_overrides[get_session] = lambda: db
     main.app.dependency_overrides[verify_token] = lambda: {"uid": TEST_UID, "email": "t@example.com"}
+    # Default AI answer for API tests: a verified Reading photo (habit id 1 is Reading).
+    monkeypatch.setattr(ai_verification, "analyze_photo", lambda jpeg_bytes: _verdict())
     # No "with": startup (Supabase + Firebase init) is deliberately not run in tests
     yield TestClient(main.app)
     main.app.dependency_overrides.clear()
@@ -68,10 +87,7 @@ def fake_ai(monkeypatch):
             calls.append(jpeg_bytes)
             if error is not None:
                 raise error
-            return ai_verification.Verdict(
-                detected_activity=activity, evidence=evidence,
-                confidence=confidence, reason=reason,
-            )
+            return _verdict(activity, evidence, confidence, reason)
         monkeypatch.setattr(ai_verification, "analyze_photo", _analyze)
         return calls
 
@@ -81,6 +97,12 @@ def fake_ai(monkeypatch):
 def make_jpeg(size=(800, 600), color=(90, 140, 90)):
     buf = io.BytesIO()
     Image.new("RGB", size, color).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def make_png(size=(300, 300), color=(90, 140, 90)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, "PNG")
     return buf.getvalue()
 
 

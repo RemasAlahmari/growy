@@ -1,7 +1,10 @@
+from conftest import make_png
+
+
 def upload_photo(client, habit_id=1):
     return client.post(
         f"/habits/{habit_id}/complete/ai",
-        files={"file": ("photo.png", b"fake image bytes", "image/png")},
+        files={"file": ("photo.png", make_png(), "image/png")},
     )
 
 

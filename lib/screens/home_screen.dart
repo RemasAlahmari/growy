@@ -122,11 +122,19 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Could not load home data: $e');
       if (!mounted) return;
+      const message =
+          'Could not load your data. Check your connection and try again.';
+      final hadData = _profile != null;
       setState(() {
         _isLoading = false;
-        _error =
-        'Could not load your data. Check your connection and try again.';
+        _error = message;
       });
+      // Pull-to-refresh failed: keep showing the old data, explain in a snack bar.
+      if (hadData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
     }
   }
 
@@ -253,6 +261,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadHomeData();
   }
 
+  // Back from Groups, Habits or Me: habits may have been verified, the gender
+  // or profile changed, so refresh what Home shows.
+  void _onBackFromTab() {
+    if (!mounted) return;
+    _loadHomeData();
+    _loadSavedAvatar();
+  }
+
   // Opens the customizer with the current look, gender and level, then
   // updates Home if the user pressed Save (pressing back returns null = no change).
   Future<void> _openCustomizer() async {
@@ -272,11 +288,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // The level comes from the backend (current_level, 1–4).
+  // The level comes from the backend (current_level, 0–4).
   // These floors match the backend and are only used for the progress bar:
-  // 0–499 -> Level 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max).
-  // Index 0 is unused.
-  static const List<int> _levelFloors = [0, 0, 500, 1500, 3000];
+  // 0–99 -> Level 0, 100–499 -> 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max)
+  static const List<int> _levelFloors = [0, 100, 500, 1500, 3000];
   static const int _maxLevel = 4;
 
   int get _level {
@@ -322,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(child: _buildBody()),
                 // Reload when coming back from Groups/Habits/Me, in case the
                 // user joined or left a group or changed their habits.
-                _BottomNav(onReturn: _loadHomeData),
+                _BottomNav(onReturn: _onBackFromTab),
               ],
             ),
           ),
@@ -785,7 +800,7 @@ class _StatCard extends StatelessWidget {
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.onReturn});
 
-  /// Called when the user comes back to Home from another tab.
+  /// Called when the user comes back from Groups, Habits or Me.
   final VoidCallback onReturn;
 
   Future<void> _open(BuildContext context, Widget page) async {

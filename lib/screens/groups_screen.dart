@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/motion/motion.dart';
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 
 /// Groups tab. "Groups to join" (suggestions) sits at the top as a swipeable
@@ -47,7 +48,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
         _discover = results[1];
         _failed = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Could not load groups: $e');
       if (mounted) setState(() => _failed = true);
     }
   }
@@ -1920,233 +1922,77 @@ class _LeaderboardEntry {
       );
 }
 
-// ───────────────────────────────────────────────────────────── sample data
-// Sample groups so the page works before the backend is ready.
-// TODO(backend): replace each method with its endpoint (named in the comment).
+// ───────────────────────────────────────────────────────────── backend
+// Groups come from the backend (backend/groups.py). A member's points are the
+// XP they earned after joining; the goal counts this month's XP of all members.
 
 class _GroupCodeNotFoundException implements Exception {
   const _GroupCodeNotFoundException();
 }
 
 class _GroupsData {
-  static const Duration _latency = Duration(milliseconds: 300);
-
-  final List<_Group> _mine = [];
-  final List<_Group> _discover = [];
-  final Map<String, _Group> _dismissed = {};
-  final Map<String, int> _dismissedIndex = {};
-
-  _GroupsData() {
-    final now = DateTime.now();
-    final monthEnd = DateTime(now.year, now.month + 1, 0);
-    _mine.addAll([
-      _Group(
-        id: 'g1',
-        name: '10K Steps Squad',
-        description:
-            'Walk, run or hike your way to 10,000 steps a day with friends who keep you honest.',
-        category: 'Health',
-        iconKey: 'run',
-        inviteCode: 'STEPS10',
-        memberCount: 24,
-        isJoined: true,
-        userRank: 2,
-        userPoints: 850,
-        goal: _GroupGoal(
-          title: 'Earn 10,000 XP together this month',
-          current: 6800,
-          target: 10000,
-          endDate: monthEnd,
-        ),
-      ),
-      _Group(
-        id: 'g2',
-        name: 'Study Together',
-        description:
-            'Daily reading and focused study sessions. Snap your desk, earn XP, climb the board.',
-        category: 'Study',
-        iconKey: 'book',
-        inviteCode: 'STUDY24',
-        memberCount: 18,
-        isJoined: true,
-        userRank: 5,
-        userPoints: 320,
-        goal: _GroupGoal(
-          title: 'Earn 9,000 XP as a group',
-          current: 4200,
-          target: 9000,
-          endDate: monthEnd,
-        ),
-      ),
-      const _Group(
-        id: 'g3',
-        name: 'Hydration Heroes',
-        description: 'Eight glasses a day, every day. Small habit, big difference.',
-        category: 'Health',
-        iconKey: 'water',
-        inviteCode: 'WATER8',
-        memberCount: 9,
-        isJoined: true,
-        userRank: 1,
-        userPoints: 410,
-      ),
-    ]);
-    _discover.addAll(const [
-      _Group(
-        id: 'g4',
-        name: 'Morning Runners',
-        description: 'Early runs before the heat. Share your route, keep your streak.',
-        category: 'Health',
-        iconKey: 'run',
-        inviteCode: 'GROWY1',
-        memberCount: 1200,
-        isJoined: false,
-      ),
-      _Group(
-        id: 'g5',
-        name: 'Exam Prep Circle',
-        description:
-            'Focused study sessions for midterms and finals. Quiet, steady, consistent.',
-        category: 'Study',
-        iconKey: 'book',
-        inviteCode: 'EXAM50',
-        memberCount: 850,
-        isJoined: false,
-      ),
-      _Group(
-        id: 'g6',
-        name: 'Mindful Mornings',
-        description:
-            'A calm start: stretch, breathe and eat a healthy breakfast before the day begins.',
-        category: 'Health',
-        iconKey: 'mind',
-        inviteCode: 'CALM30',
-        memberCount: 430,
-        isJoined: false,
-      ),
-      _Group(
-        id: 'g7',
-        name: 'Book Club Readers',
-        description: 'Twenty pages a day adds up to a book a month.',
-        category: 'Study',
-        iconKey: 'book',
-        inviteCode: 'READ20',
-        memberCount: 610,
-        isJoined: false,
-      ),
-    ]);
-  }
+  static List<_Group> _groups(dynamic json) => (json as List<dynamic>)
+      .map((item) => _Group.fromJson(item as Map<String, dynamic>))
+      .toList();
 
   /// GET /groups/mine
-  Future<List<_Group>> getMyGroups() async {
-    await Future.delayed(_latency);
-    return List.of(_mine);
-  }
+  Future<List<_Group>> getMyGroups() async =>
+      _groups(await ApiClient.getJson('/groups/mine'));
 
   /// GET /groups/discover
-  Future<List<_Group>> getDiscoverGroups() async {
-    await Future.delayed(_latency);
-    return List.of(_discover);
-  }
+  Future<List<_Group>> getDiscoverGroups() async =>
+      _groups(await ApiClient.getJson('/groups/discover'));
 
   /// POST /groups/{id}/join
   Future<_Group> joinGroup(String groupId) async {
-    await Future.delayed(_latency);
-    final index = _discover.indexWhere((g) => g.id == groupId);
-    if (index == -1) throw StateError('Group $groupId is not joinable');
-    final g = _discover.removeAt(index);
-    final joined = g.copyWith(
-      isJoined: true,
-      memberCount: g.memberCount + 1,
-      userRank: g.memberCount + 1,
-      userPoints: 0,
-    );
-    _mine.add(joined);
-    return joined;
+    final json = await ApiClient.postJson('/groups/$groupId/join');
+    return _Group.fromJson(json as Map<String, dynamic>);
   }
 
   /// POST /groups/join {room_code}
   Future<_Group> joinGroupByCode(String code) async {
-    await Future.delayed(_latency);
-    final clean = code.trim().toUpperCase();
-    final match = _discover.where((g) => g.inviteCode == clean);
-    if (match.isEmpty) throw const _GroupCodeNotFoundException();
-    return joinGroup(match.first.id);
+    try {
+      final json = await ApiClient.postJson('/groups/join', {
+        'room_code': code.trim().toUpperCase(),
+      });
+      return _Group.fromJson(json as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) throw const _GroupCodeNotFoundException();
+      rethrow;
+    }
   }
 
-  /// POST /groups/{id}/dismiss
+  /// POST /groups/{id}/dismiss ("Not interested")
   Future<void> dismissGroup(String groupId) async {
-    final index = _discover.indexWhere((g) => g.id == groupId);
-    if (index == -1) return;
-    _dismissedIndex[groupId] = index;
-    _dismissed[groupId] = _discover.removeAt(index);
+    try {
+      await ApiClient.postJson('/groups/$groupId/dismiss');
+    } catch (e) {
+      // The card is already hidden; it may come back after a refresh.
+      debugPrint('Could not hide group $groupId: $e');
+    }
   }
 
+  /// DELETE /groups/{id}/dismiss ("Undo")
   Future<void> undoDismissGroup(String groupId) async {
-    final g = _dismissed.remove(groupId);
-    if (g == null) return;
-    final index =
-        (_dismissedIndex.remove(groupId) ?? 0).clamp(0, _discover.length).toInt();
-    _discover.insert(index, g);
+    try {
+      await ApiClient.deleteJson('/groups/$groupId/dismiss');
+    } catch (e) {
+      debugPrint('Could not undo hiding group $groupId: $e');
+    }
   }
 
   /// DELETE /groups/{id}/membership
   Future<void> leaveGroup(String groupId) async {
-    await Future.delayed(_latency);
-    final index = _mine.indexWhere((g) => g.id == groupId);
-    if (index == -1) return;
-    final g = _mine.removeAt(index);
-    _discover.add(g.copyWith(
-      isJoined: false,
-      memberCount: g.memberCount - 1,
-      userRank: 0,
-      userPoints: 0,
-    ));
+    await ApiClient.deleteJson('/groups/$groupId/membership');
   }
 
-  /// GET /groups/{id}/leaderboard
+  /// GET /groups/{id}/leaderboard (every member, ranked)
   Future<List<_LeaderboardEntry>> getLeaderboard(String groupId) async {
-    await Future.delayed(_latency);
-    final group = _mine.firstWhere(
-      (g) => g.id == groupId,
-      orElse: () => throw StateError('Not a member of $groupId'),
-    );
-    const names = [
-      'Sara', 'Lama', 'Ahmed', 'Noura', 'Omar', 'Reem', 'Faisal', 'Huda',
-      'Khalid', 'Maha', 'Yousef', 'Dana', 'Ali', 'Joud', 'Hassan', 'Raghad',
-      'Turki', 'Shahad', 'Majed', 'Ghada', 'Nawaf', 'Rana', 'Saad', 'Lulu',
-      'Bader', 'Haya', 'Fahad', 'Asma', 'Waleed', 'Nouf', 'Ziyad', 'Afnan',
-      'Mishari', 'Razan', 'Talal', 'Abeer', 'Sultan', 'Wejdan', 'Nasser',
-    ];
-    const step = 60;
-    final others = (group.memberCount - 1).clamp(0, 39).toInt();
-    _LeaderboardEntry me(int rank) => _LeaderboardEntry(
-          rank: rank,
-          userId: 'me',
-          displayName: 'You',
-          points: group.userPoints,
-          isMe: true,
-        );
-    final entries = <_LeaderboardEntry>[];
-    var rank = 1;
-    var meAdded = false;
-    for (var i = 0; i < others; i++) {
-      if (!meAdded && rank == group.userRank) {
-        entries.add(me(rank++));
-        meAdded = true;
-      }
-      final points = group.userPoints + (group.userRank - rank) * step;
-      entries.add(_LeaderboardEntry(
-        rank: rank,
-        userId: 'member_${groupId}_$i',
-        displayName: names[i % names.length],
-        points: points < 0 ? 0 : points,
-        isMe: false,
-      ));
-      rank++;
-    }
-    if (!meAdded) entries.add(me(group.userRank));
-    return entries;
+    final list =
+        await ApiClient.getJson('/groups/$groupId/leaderboard') as List<dynamic>;
+    return list
+        .map((item) => _LeaderboardEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 }
 

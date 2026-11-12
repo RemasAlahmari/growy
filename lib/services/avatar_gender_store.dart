@@ -5,8 +5,9 @@ import '../utils/avatar_stage.dart';
 
 /// Remembers if the user's avatar is a boy or a girl, on this phone.
 ///
-/// The backend can't store gender yet, so the choice is saved locally,
-/// separately for each logged-in account.
+/// Saved locally, separately for each logged-in account, so the right
+/// character shows instantly. The backend keeps a copy too (GET /users/me
+/// returns "gender"), which is used on a phone that has nothing saved yet.
 class AvatarGenderStore {
   static String get _key {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
@@ -27,7 +28,7 @@ class AvatarGenderStore {
 
   /// Which character to show:
   /// 1. the choice saved on this phone (the most recent one),
-  /// 2. otherwise the gender from the backend (once the backend sends it),
+  /// 2. otherwise the gender from the backend (chosen on Sign Up),
   /// 3. otherwise girl.
   static Future<AvatarGender> resolve({String? backendValue}) async {
     return await load() ??

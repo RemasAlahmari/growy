@@ -1,12 +1,13 @@
 from sqlmodel import select
 from models import User, HabitLog, today_ksa
+from conftest import make_png
 
 
 def upload_photo(client, habit_id=1, content_type="image/png"):
-    # Sends a fake photo, like the Flutter app does (field name "file")
+    # Sends a small real photo, like the Flutter app does (field name "file")
     return client.post(
         f"/habits/{habit_id}/complete/ai",
-        files={"file": ("photo.png", b"fake image bytes", content_type)},
+        files={"file": ("photo.png", make_png(), content_type)},
     )
 
 
