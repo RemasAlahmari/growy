@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'avatar_customizer_screen.dart';
 import 'login_screen.dart';
+import '../widgets/reminder_settings_card.dart';
 
 /// Me tab: identity, progress, personal info and account options.
 class MeScreen extends StatefulWidget {
@@ -218,6 +219,9 @@ class _MeScreenState extends State<MeScreen> {
                         onPressed: () => _openEditProfile(user),
                       ),
                     ),
+                    const SizedBox(height: _GrowySpacing.xl),
+                    const _SectionHeader(title: 'Reminders'),
+                    const ReminderSettingsCard(),
                     const SizedBox(height: _GrowySpacing.xl),
                     const _SectionHeader(title: 'Account'),
                     _GrowyCard(

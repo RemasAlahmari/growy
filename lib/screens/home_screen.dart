@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import '../services/reminder_service.dart';
 import '../core/motion/growy_level_up_animation.dart';
 import '../core/motion/motion.dart';
 import 'add_habits_screen.dart';
@@ -114,6 +114,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
       _loadGender();
+
+       // Tonight's reminder: skipped if everything is done, otherwise it
+      // says how many habits are left.
+      ReminderService.updateTodayProgress(
+        remaining: _items.where((i) => !i.habit.completedToday).length,
+      );
 
       final newLevel = _level;
       if (oldLevel != null && newLevel > oldLevel) {
