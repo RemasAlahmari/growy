@@ -49,14 +49,51 @@ class JoinedGroup {
     required this.id,
     required this.name,
     required this.category,
+    this.iconKey = '',
   });
 
   final String id;
   final String name;
 
-  /// "Study" or "Health". Every habit with this category is one the
-  /// group's members need to do each day.
+  /// "Study" or "Health".
   final String category;
+
+  /// The group's type from the backend: "run", "book", "water", "mind".
+  final String iconKey;
+
+  /// Words a habit's name must contain to belong to each group type.
+  static const Map<String, List<String>> _habitWordsByType = {
+    'run': ['walk', 'run', 'step', 'jog'],
+    'book': ['read', 'study', 'book', 'notes', 'homework'],
+    'water': ['water', 'drink', 'hydrat'],
+    'mind': ['meditat', 'stretch', 'yoga', 'breath', 'breakfast'],
+  };
+
+  /// The group's type: its icon_key, or guessed from its name.
+  String get _type {
+    if (_habitWordsByType.containsKey(iconKey)) return iconKey;
+    final n = name.toLowerCase();
+    if (n.contains('step') || n.contains('run') || n.contains('walk')) {
+      return 'run';
+    }
+    if (n.contains('read') || n.contains('book') ||
+        n.contains('study') || n.contains('exam')) {
+      return 'book';
+    }
+    if (n.contains('water') || n.contains('hydrat')) return 'water';
+    if (n.contains('mind') || n.contains('meditat')) return 'mind';
+    return '';
+  }
+
+  /// True if members of this group need to do [entry] each day.
+  /// A walking group needs walking, not every Health habit.
+  bool needs(HabitEntry entry) {
+    final words = _habitWordsByType[_type];
+    // Unknown group type: fall back to matching the category.
+    if (words == null) return entry.category == category;
+    final habitName = entry.habit.name.toLowerCase();
+    return words.any(habitName.contains);
+  }
 }
 /// Loads everything the Home screen shows from the backend.
 class HomeService {
@@ -156,6 +193,7 @@ class HomeService {
         id: json['id'].toString(),
         name: (json['room_name'] ?? json['name'] ?? '') as String,
         category: normalizeCategory(json['category']) ?? 'Health',
+        iconKey: (json['icon_key'] ?? '').toString(),
       );
     }).toList();
   }

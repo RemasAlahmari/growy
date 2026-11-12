@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final entry in catalog) {
       final isPersonal = myHabitIds == null || myHabitIds.contains(entry.habit.id);
       final groupNames = groups
-          .where((g) => g.category == entry.category)
+          .where((g) => g.needs(entry))
           .map((g) => g.name)
           .toList();
       if (!isPersonal && groupNames.isEmpty) continue;

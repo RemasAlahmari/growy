@@ -78,7 +78,7 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
   }
 
   List<String> _groupsNeeding(HabitEntry entry) => _groups
-      .where((g) => g.category == entry.category)
+      .where((g) => g.needs(entry))
       .map((g) => g.name)
       .toList();
 
