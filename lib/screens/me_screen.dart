@@ -44,6 +44,7 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Future<void> _load() async {
+    if (!await _sessionStillValid()) return;
     try {
       final user = await _meData.getMe();
       if (mounted) {
@@ -165,6 +166,37 @@ class _MeScreenState extends State<MeScreen> {
       MaterialPageRoute(builder: (_) => LoginScreen()),
       (route) => false,
     );
+  }
+
+  /// After an email change is confirmed, Firebase ends the old session.
+  /// Sends the user to Login with a clear message instead of failing.
+  Future<bool> _sessionStillValid() async {
+    try {
+      await FirebaseAuth.instance.currentUser?.reload();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      const ended = {
+        'user-token-expired',
+        'invalid-user-token',
+        'user-not-found',
+      };
+      if (!ended.contains(e.code)) return true;
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return false;
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => LoginScreen()),
+        (route) => false,
+      );
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Your email was changed. Please log in with your new email.',
+          ),
+        ),
+      );
+      return false;
+    }
   }
 
   @override
@@ -512,9 +544,14 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
   bool get _emailChanged =>
       _email.text.trim().toLowerCase() != widget.user.email.toLowerCase();
 
+  /// True only if the user really typed a different username. Capitals don't
+  /// count ("Zad" = "zad"), because the backend saves usernames in lowercase.
+  bool get _usernameChanged =>
+      _username.text.trim().toLowerCase() != widget.user.username.toLowerCase();
+
   bool get _isDirty =>
       _displayName.text.trim() != widget.user.displayName ||
-      _username.text.trim().toLowerCase() != widget.user.username ||
+      _usernameChanged ||
       _emailChanged;
 
   // ----------------------------------------------------------- actions
@@ -541,14 +578,16 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
         );
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Check your new inbox to confirm the email change.'),
+           content: Text('Check your new inbox and tap the link. Then log in again with your new email.',),
           ),
         );
       }
 
+      // The username is only sent when it changed, so saving a new display
+      // name or email never fails with "That username is taken".
       await _meData.updateMe(
         displayName: _displayName.text.trim(),
-        username: _username.text.trim(),
+        username: _usernameChanged ? _username.text.trim() : null,
       );
       if (mounted) Navigator.of(context).pop(true);
     } on _UsernameTakenException {
@@ -564,56 +603,11 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
-
   Future<String?> _askCurrentPassword() {
-    final controller = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _GrowyColors.background,
-        surfaceTintColor: _GrowyColors.background,
-        title: Text('Confirm it\'s you', style: _GrowyText.sectionTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Enter your current password to change your email.',
-              style: _GrowyText.body,
-            ),
-            const SizedBox(height: _GrowySpacing.md),
-            TextField(
-              controller: controller,
-              obscureText: true,
-              autofocus: true,
-              style: _GrowyText.body,
-              decoration: _inputDecoration(hint: 'Current password'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: _GrowyText.body.copyWith(
-                color: _GrowyColors.textSecondary,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: Text(
-              'Continue',
-              style: _GrowyText.body.copyWith(
-                color: _GrowyColors.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ).whenComplete(controller.dispose);
+      builder: (_) => const _CurrentPasswordDialog(),
+    );
   }
 
   Future<void> _changePassword() async {
@@ -1908,14 +1902,15 @@ class _MeData {
     return _remember(json);
   }
 
+  /// [username] is null when it didn't change; the backend then leaves it as is.
   Future<_UserProfile> updateMe({
     required String displayName,
-    required String username,
+    String? username,
   }) async {
     try {
       final json = await ApiClient.putJson('/users/me', {
         'display_name': displayName.trim(),
-        'username': username.trim(),
+        if (username != null) 'username': username.trim(),
       }) as Map<String, dynamic>;
       return _remember(json);
     } on ApiException catch (e) {
@@ -2087,4 +2082,70 @@ String _initialsOf(String name) {
   final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
   if (parts.isEmpty) return '?';
   return parts.take(2).map((p) => p[0].toUpperCase()).join();
+}
+
+/// Asks for the current password before an email change. Owns its text
+/// controller, so it's only disposed after the dialog has fully closed.
+class _CurrentPasswordDialog extends StatefulWidget {
+  const _CurrentPasswordDialog();
+
+  @override
+  State<_CurrentPasswordDialog> createState() => _CurrentPasswordDialogState();
+}
+
+class _CurrentPasswordDialogState extends State<_CurrentPasswordDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: _GrowyColors.background,
+      surfaceTintColor: _GrowyColors.background,
+      title: Text("Confirm it's you", style: _GrowyText.sectionTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enter your current password to change your email.',
+            style: _GrowyText.body,
+          ),
+          const SizedBox(height: _GrowySpacing.md),
+          TextField(
+            controller: _controller,
+            obscureText: true,
+            autofocus: true,
+            style: _GrowyText.body,
+            decoration: _inputDecoration(hint: 'Current password'),
+            onSubmitted: (value) => Navigator.of(context).pop(value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: _GrowyText.body.copyWith(color: _GrowyColors.textSecondary),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(
+            'Continue',
+            style: _GrowyText.body.copyWith(
+              color: _GrowyColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -5,6 +5,7 @@ import 'api_client.dart';
 class UserProfile {
   const UserProfile({
     required this.username,
+    required this.displayName,
     required this.totalPoints,
     required this.currentLevel,
     required this.streakDays,
@@ -13,6 +14,7 @@ class UserProfile {
   });
 
   final String username;
+  final String displayName;
   final int totalPoints;
   final int currentLevel;
   final int streakDays;
@@ -22,8 +24,12 @@ class UserProfile {
   final String? gender;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+       final username = json['username'] as String? ?? '';
     return UserProfile(
-      username: json['username'] as String? ?? '',
+      username: username,
+      displayName: (json['display_name'] as String?)?.trim().isNotEmpty == true
+          ? json['display_name'] as String
+          : username,
       totalPoints: (json['total_points'] as num? ?? 0).toInt(),
       currentLevel: (json['current_level'] as num? ?? 0).toInt(),
       streakDays: (json['streak_days'] as num? ?? 0).toInt(),

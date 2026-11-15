@@ -112,6 +112,92 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
+  // One button, two choices: join with a code, or create a new group.
+  Future<void> _showGroupOptions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: _GrowyColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(_GrowyRadius.card),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _GrowySpacing.sm,
+            _GrowySpacing.xl,
+            _GrowySpacing.sm,
+            _GrowySpacing.md,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _GrowySpacing.lg,
+                ),
+                child: Text('Add a group', style: _GrowyText.sectionTitle),
+              ),
+              const SizedBox(height: _GrowySpacing.sm),
+              ListTile(
+                leading: _IconCircle(icon: Icons.vpn_key_outlined, size: 40),
+                title: Text('Join with a code', style: _GrowyText.cardTitle),
+                subtitle: Text(
+                  'A friend shared a group code with you',
+                  style: _GrowyText.caption,
+                ),
+                onTap: () => Navigator.of(context).pop('join'),
+              ),
+              ListTile(
+                leading: _IconCircle(
+                  icon: Icons.add_rounded,
+                  size: 40,
+                  foreground: _GrowyColors.secondaryDeep,
+                  background: _GrowyColors.secondaryTint,
+                ),
+                title: Text('Create a new group', style: _GrowyText.cardTitle),
+                subtitle: Text(
+                  'Start your own and invite friends',
+                  style: _GrowyText.caption,
+                ),
+                onTap: () => Navigator.of(context).pop('create'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'join') await _showJoinWithCode();
+    if (choice == 'create') await _showCreateGroup();
+  }
+
+  // Opens the "Create a group" card. On success the user is already a member,
+  // and a dialog shows the invite code to share.
+  Future<void> _showCreateGroup() async {
+    final created = await showModalBottomSheet<_Group>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _GrowyColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(_GrowyRadius.card),
+        ),
+      ),
+      builder: (_) => const _CreateGroupSheet(),
+    );
+    if (created == null || !mounted) return;
+    HapticFeedback.lightImpact();
+    setState(() => _myGroups = [...?_myGroups, created]);
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _GroupCreatedDialog(group: created),
+    );
+    if (mounted) _load();
+  }
+
   Future<void> _showJoinWithCode() async {
     final joined = await showModalBottomSheet<_Group>(
       context: context,
@@ -158,10 +244,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 children: [ 
                   const _BackToHome(),
                   Expanded(child: Text('Groups', style: _GrowyText.screenTitle)),
-                 
                   IconButton(
-                    tooltip: 'Join with a code',
-                    onPressed: _showJoinWithCode,
+                    tooltip: 'Join or create a group',
+                    onPressed: _showGroupOptions,
                     icon: Icon(
                       Icons.group_add_outlined,
                       color: _GrowyColors.primary,
@@ -206,8 +291,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       icon: Icons.groups_outlined,
                       message: "You haven't joined a group yet",
                       detail: suggestions.isEmpty
-                          ? 'Ask a friend for their group code to join.'
-                          : 'Pick one above to start competing with friends.',
+                          ? 'Ask a friend for their group code, or start your own.'
+                          : 'Pick one above, or start your own group.',
+                      buttonLabel: 'Create a group',
+                      onPressed: _showCreateGroup,
                     ),
                   )
                 else
@@ -365,6 +452,339 @@ class _JoinWithCodeSheetState extends State<_JoinWithCodeSheet> {
       ),
     );
   }
+}
+
+// ───────────────────────────────────────────────────── create a group
+
+/// Bottom sheet card: name, description, type and an optional monthly goal.
+/// Pops with the new group (the user is already a member of it).
+class _CreateGroupSheet extends StatefulWidget {
+  const _CreateGroupSheet();
+
+  @override
+  State<_CreateGroupSheet> createState() => _CreateGroupSheetState();
+}
+
+class _CreateGroupSheetState extends State<_CreateGroupSheet> {
+  final _name = TextEditingController();
+  final _description = TextEditingController();
+
+  /// "run", "book", "water" or "mind". Decides the icon, the category
+  /// (book = Study, the rest = Health) and which habits members see on Home.
+  String _type = 'run';
+
+  /// Monthly XP goal for the whole group; null = no goal.
+  int? _goal;
+
+  bool _busy = false;
+  String? _nameError;
+  String? _error;
+
+  static const List<(String, String)> _types = [
+    ('run', 'Walking'),
+    ('book', 'Reading'),
+    ('water', 'Water'),
+    ('mind', 'Mindful'),
+  ];
+
+  static const List<int?> _goals = [null, 500, 1000, 2000];
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _name.text.trim();
+    if (name.length < 3) {
+      setState(() => _nameError = 'Use at least 3 characters.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _nameError = null;
+      _error = null;
+    });
+    try {
+      final group = await _groupsData.createGroup(
+        name: name,
+        description: _description.text.trim(),
+        iconKey: _type,
+        goalTarget: _goal,
+      );
+      if (mounted) Navigator.of(context).pop(group);
+    } on _GroupNameTakenException {
+      if (mounted) {
+        setState(() => _nameError = 'A group with that name already exists.');
+      }
+    } catch (e) {
+      debugPrint('Could not create group: $e');
+      if (mounted) {
+        setState(() => _error = "Couldn't create the group. Try again.");
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(
+          text,
+          style: _GrowyText.caption.copyWith(
+            color: _GrowyColors.textMain,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          _GrowySpacing.screen,
+          _GrowySpacing.xl,
+          _GrowySpacing.screen,
+          _GrowySpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Create a group', style: _GrowyText.sectionTitle),
+            const SizedBox(height: _GrowySpacing.xs),
+            Text(
+              "You'll get an invite code to share with friends.",
+              style: _GrowyText.caption,
+            ),
+            const SizedBox(height: _GrowySpacing.lg),
+
+            _label('Group name'),
+            TextField(
+              controller: _name,
+              autofocus: true,
+              maxLength: 40,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              style: _GrowyText.body,
+              onChanged: (_) {
+                if (_nameError != null) setState(() => _nameError = null);
+              },
+              decoration: _sheetInputDecoration(
+                hint: 'e.g. Night Readers',
+                errorText: _nameError,
+              ),
+            ),
+            const SizedBox(height: _GrowySpacing.sm),
+
+            _label('Description (optional)'),
+            TextField(
+              controller: _description,
+              maxLength: 200,
+              minLines: 2,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              style: _GrowyText.body,
+              decoration: _sheetInputDecoration(
+                hint: 'What is this group about?',
+              ),
+            ),
+            const SizedBox(height: _GrowySpacing.sm),
+
+            _label('What will members do?'),
+            Wrap(
+              spacing: _GrowySpacing.sm,
+              runSpacing: _GrowySpacing.sm,
+              children: [
+                for (final (key, label) in _types)
+                  _ChoicePill(
+                    label: label,
+                    icon: _GroupAvatar.iconFor(key),
+                    selected: _type == key,
+                    onTap: () => setState(() => _type = key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: _GrowySpacing.xs),
+            Text(
+              "Members will see this group's habits on their Home page.",
+              style: _GrowyText.caption,
+            ),
+            const SizedBox(height: _GrowySpacing.lg),
+
+            _label('Monthly group goal'),
+            Wrap(
+              spacing: _GrowySpacing.sm,
+              runSpacing: _GrowySpacing.sm,
+              children: [
+                for (final goal in _goals)
+                  _ChoicePill(
+                    label: goal == null ? 'No goal' : '${_formatNumber(goal)} XP',
+                    selected: _goal == goal,
+                    onTap: () => setState(() => _goal = goal),
+                  ),
+              ],
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: _GrowySpacing.md),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: _GrowyText.caption.copyWith(color: _GrowyColors.error),
+              ),
+            ],
+            const SizedBox(height: _GrowySpacing.xl),
+            _GrowyButton(
+              label: 'Create group',
+              icon: Icons.add_rounded,
+              isLoading: _busy,
+              onPressed: _submit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown right after creating a group: the invite code with Copy and Share.
+class _GroupCreatedDialog extends StatelessWidget {
+  final _Group group;
+  const _GroupCreatedDialog({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: _GrowyColors.background,
+      surfaceTintColor: _GrowyColors.background,
+      contentPadding: const EdgeInsets.fromLTRB(
+        _GrowySpacing.xl,
+        _GrowySpacing.xl,
+        _GrowySpacing.xl,
+        0,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: _GroupAvatar(group: group, size: 64)),
+          const SizedBox(height: _GrowySpacing.md),
+          Text(
+            '${group.name} is ready!',
+            textAlign: TextAlign.center,
+            style: _GrowyText.sectionTitle,
+          ),
+          const SizedBox(height: _GrowySpacing.xs),
+          Text(
+            'Share this code so friends can join with "Join with a code".',
+            textAlign: TextAlign.center,
+            style: _GrowyText.caption,
+          ),
+          const SizedBox(height: _GrowySpacing.lg),
+          if (group.inviteCode != null) _InviteCodeCard(group: group),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Done',
+            style: _GrowyText.body.copyWith(
+              color: _GrowyColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rounded selectable pill used for the group type and goal choices.
+class _ChoicePill extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ChoicePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? _GrowyColors.primary : _GrowyColors.textMain;
+    final shape = StadiumBorder(
+      side: BorderSide(
+        color: selected ? _GrowyColors.primary : _GrowyColors.cardBorder,
+        width: selected ? 1.5 : 1,
+      ),
+    );
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? _GrowyColors.primaryTint : _GrowyColors.background,
+        shape: shape,
+        child: InkWell(
+          customBorder: shape,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: color),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: _GrowyText.body.copyWith(
+                    fontSize: 13,
+                    color: color,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Same input look as "Join with a code".
+InputDecoration _sheetInputDecoration({String? hint, String? errorText}) {
+  OutlineInputBorder border(Color color, [double width = 1]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_GrowyRadius.input),
+        borderSide: BorderSide(color: color, width: width),
+      );
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: _GrowyText.body.copyWith(color: _GrowyColors.textSecondary),
+    errorText: errorText,
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: _GrowySpacing.lg,
+      vertical: 14,
+    ),
+    enabledBorder: border(_GrowyColors.inputBorder),
+    focusedBorder: border(_GrowyColors.primary, 1.5),
+    errorBorder: border(_GrowyColors.error),
+    focusedErrorBorder: border(_GrowyColors.error, 1.5),
+  );
 }
 
 /// One group: header, the user's standing, the group goal and the leaderboard.
@@ -1930,6 +2350,10 @@ class _GroupCodeNotFoundException implements Exception {
   const _GroupCodeNotFoundException();
 }
 
+class _GroupNameTakenException implements Exception {
+  const _GroupNameTakenException();
+}
+
 class _GroupsData {
   static List<_Group> _groups(dynamic json) => (json as List<dynamic>)
       .map((item) => _Group.fromJson(item as Map<String, dynamic>))
@@ -1942,6 +2366,28 @@ class _GroupsData {
   /// GET /groups/discover
   Future<List<_Group>> getDiscoverGroups() async =>
       _groups(await ApiClient.getJson('/groups/discover'));
+
+  /// POST /groups: creates a group; the creator joins it automatically,
+  /// so the reply includes the invite code.
+  Future<_Group> createGroup({
+    required String name,
+    required String description,
+    required String iconKey,
+    int? goalTarget,
+  }) async {
+    try {
+      final json = await ApiClient.postJson('/groups', {
+        'name': name,
+        'description': description,
+        'icon_key': iconKey,
+        if (goalTarget != null) 'goal_target': goalTarget,
+      });
+      return _Group.fromJson(json as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) throw const _GroupNameTakenException();
+      rethrow;
+    }
+  }
 
   /// POST /groups/{id}/join
   Future<_Group> joinGroup(String groupId) async {

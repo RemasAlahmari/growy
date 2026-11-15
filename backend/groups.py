@@ -9,6 +9,7 @@ Rules (documented choices):
 - The invite code is only sent to members (they are the ones who share it).
 """
 import calendar
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -28,6 +29,23 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 
 class JoinByCode(SQLModel):
     room_code: str
+
+
+# Each group type decides its icon and its category ("Study" or "Health").
+# The app also uses the type to pick which habits the group needs.
+GROUP_TYPES = {"run": "Health", "book": "Study", "water": "Health", "mind": "Health"}
+
+# Invite codes: no 0/O or 1/I/L, so friends can't mistype them.
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 6
+
+
+class CreateGroup(SQLModel):
+    # The body of POST /groups (the "Create group" card in the app).
+    name: str
+    description: str = ""
+    icon_key: str = "run"                 # "run", "book", "water" or "mind"
+    goal_target: Optional[int] = None     # optional monthly XP goal, e.g. 1000
 
 
 @dataclass
@@ -141,6 +159,62 @@ def _join(session: Session, room: Room, user_id: int) -> dict:
         except IntegrityError:  # two quick taps: already joined
             session.rollback()
     return group_to_dict(session, room, user_id)
+
+
+def _new_code(session: Session) -> str:
+    # A random 6-character invite code that no other group uses yet.
+    while True:
+        code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+        if session.exec(select(Room.id).where(Room.code == code)).first() is None:
+            return code
+
+
+@router.post("")
+def create_group(
+    data: CreateGroup,
+    session: Session = Depends(get_session),
+    decoded_token: dict = Depends(verify_token),
+):
+    # Creates a group with a fresh invite code. The creator joins it right away,
+    # so the reply includes the code for them to share.
+    user = get_current_user(session, decoded_token)
+
+    name = " ".join(data.name.split())  # trims and collapses extra spaces
+    if not 3 <= len(name) <= 40:
+        raise HTTPException(status_code=422, detail="Group name must be 3-40 characters.")
+    description = data.description.strip()
+    if len(description) > 200:
+        raise HTTPException(status_code=422, detail="Description must be 200 characters or fewer.")
+    icon_key = data.icon_key.strip().lower()
+    if icon_key not in GROUP_TYPES:
+        raise HTTPException(status_code=422, detail="Group type must be run, book, water or mind.")
+    goal_target = data.goal_target
+    if goal_target is not None and not 100 <= goal_target <= 100_000:
+        raise HTTPException(status_code=422, detail="The group goal must be between 100 and 100,000 XP.")
+
+    if session.exec(select(Room.id).where(func.lower(Room.name) == name.lower())).first() is not None:
+        raise HTTPException(status_code=409, detail="A group with that name already exists.")
+
+    room = Room(
+        name=name,
+        description=description,
+        category=GROUP_TYPES[icon_key],
+        icon_key=icon_key,
+        code=_new_code(session),
+        goal_title=f"Earn {goal_target:,} XP together this month" if goal_target else None,
+        goal_target=goal_target,
+    )
+    session.add(room)
+    try:
+        session.flush()  # gives the room its id
+        session.add(RoomMember(room_id=room.id, user_id=user.id))
+        session.commit()
+    except IntegrityError:
+        # Someone created a group with the same name (or code) at the same moment.
+        session.rollback()
+        raise HTTPException(status_code=409, detail="A group with that name already exists.")
+    session.refresh(room)
+    return group_to_dict(session, room, user.id)
 
 
 @router.get("/mine")

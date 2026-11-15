@@ -429,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 Text(
-                  'Hello, ${_profile?.username ?? ''}!',
+                  'Hello, ${_profile?.displayName ?? ''}!',
                   style: GoogleFonts.fraunces(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
