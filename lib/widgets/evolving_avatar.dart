@@ -34,7 +34,7 @@ class EvolvingAvatar extends StatefulWidget {
   final CharacterConfig config;
   final AvatarGender gender;
 
-  /// Backend levels (0–4). The character stages come from avatar_stage.dart.
+  /// Backend levels (1–4). The character stages come from avatar_stage.dart.
   final int fromLevel;
   final int toLevel;
 

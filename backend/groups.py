@@ -2,10 +2,12 @@
 
 Rules (documented choices):
 - A member's group points = XP from their verified habits AFTER they joined that
-  group, so people who join later compete fairly.
+  group, so everyone starts from zero and people who join later compete fairly.
+  Only the group's own habit counts (GROUP_HABIT: a Book group counts Reading only).
+  Leaving deletes the membership, so rejoining starts from zero again.
 - Leaderboard: most points first; ties go to whoever joined first.
 - Group goal: XP all current members earned together this calendar month
-  (Saudi time), counting only XP earned after each member joined.
+  (Saudi time), counting only the group's habit and only after each member joined.
 - The invite code is only sent to members (they are the ones who share it).
 """
 import calendar
@@ -15,14 +17,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, false, func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
 
 from auth import verify_token
 from database import get_session
 from deps import get_current_user
-from models import KSA_TZ, HabitLog, Room, RoomDismissal, RoomMember, User, today_ksa
+from models import KSA_TZ, Habit, HabitLog, Room, RoomDismissal, RoomMember, User, today_ksa
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -33,7 +35,11 @@ class JoinByCode(SQLModel):
 
 # Each group type decides its icon and its category ("Study" or "Health").
 # The app also uses the type to pick which habits the group needs.
-GROUP_TYPES = {"run": "Health", "book": "Study", "water": "Health", "mind": "Health"}
+GROUP_TYPES = {"run": "Health", "book": "Study", "water": "Health", "workout": "Health"}
+
+# The one habit that earns points inside each group type (habit names from seed_habits.py,
+# compared in lower case). Points from other habits don't count in that group.
+GROUP_HABIT = {"run": "walking", "book": "reading", "water": "drink water", "workout": "workout"}
 
 # Invite codes: no 0/O or 1/I/L, so friends can't mistype them.
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -44,7 +50,7 @@ class CreateGroup(SQLModel):
     # The body of POST /groups (the "Create group" card in the app).
     name: str
     description: str = ""
-    icon_key: str = "run"                 # "run", "book", "water" or "mind"
+    icon_key: str = "run"                 # "run", "book", "water" or "workout"
     goal_target: Optional[int] = None     # optional monthly XP goal, e.g. 1000
 
 
@@ -71,10 +77,19 @@ def _month_window():
 
 def _points_rows(session: Session, room_id: int, since: Optional[datetime] = None):
     # One row per member: (user_id, username, display_name, joined_at, points).
+    # Counts only the group's habit, verified after the member joined.
+    room = session.get(Room, room_id)
+    habit_name = GROUP_HABIT.get((room.icon_key or "").lower()) if room else None
+    if habit_name:
+        habit_ids = select(Habit.id).where(func.lower(Habit.name) == habit_name)
+        habit_filter = HabitLog.habit_id.in_(habit_ids)
+    else:
+        habit_filter = false()  # unknown group type: no habit earns points here
     log_filter = [
         HabitLog.user_id == RoomMember.user_id,
         HabitLog.verification_status == "verified",
         HabitLog.completed_at >= RoomMember.joined_at,
+        habit_filter,
     ]
     if since is not None:
         log_filter.append(HabitLog.completed_at >= since)
@@ -187,7 +202,7 @@ def create_group(
         raise HTTPException(status_code=422, detail="Description must be 200 characters or fewer.")
     icon_key = data.icon_key.strip().lower()
     if icon_key not in GROUP_TYPES:
-        raise HTTPException(status_code=422, detail="Group type must be run, book, water or mind.")
+        raise HTTPException(status_code=422, detail="Group type must be run, book, water or workout.")
     goal_target = data.goal_target
     if goal_target is not None and not 100 <= goal_target <= 100_000:
         raise HTTPException(status_code=422, detail="The group goal must be between 100 and 100,000 XP.")

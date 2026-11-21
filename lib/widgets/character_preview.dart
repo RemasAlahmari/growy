@@ -6,7 +6,7 @@ import '../models/character_config.dart';
 import '../utils/avatar_stage.dart';
 import '../utils/avatar_svg.dart';
 
-/// Shows the recoloured avatar for a gender + backend level (0–4).
+/// Shows the recoloured avatar for a gender + backend level (1–4).
 ///
 /// `CharacterPreview(config: _config)` still works: gender defaults to girl
 /// and level to 1.

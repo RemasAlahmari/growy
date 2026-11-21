@@ -82,7 +82,7 @@ class _MeScreenState extends State<MeScreen> {
         builder: (_) => AvatarCustomizerScreen(
           initialConfig: _avatarConfig,
           initialGender: _avatarGender,
-          level: _user?.level ?? 0,
+          level: _user?.level ?? 1,
         ),
       ),
     );
@@ -1805,7 +1805,7 @@ class _UserProfile {
       email: (json['email'] ?? '') as String,
       photoUrl: ApiClient.absoluteUrl(json['profile_image_url'] as String?),
       totalXp: (json['total_points'] ?? 0) as int,
-      level: (json['current_level'] ?? 0) as int,
+      level: (json['current_level'] ?? 1) as int,
       xpIntoLevel: (json['xp_into_level'] ?? 0) as int,
       xpForNextLevel: json['xp_for_next_level'] as int?,
       currentStreak: (json['streak_days'] ?? 0) as int,
@@ -1878,7 +1878,7 @@ class _AccountService {
   }
 }
 
-// Levels: 0–99 XP → 0, 100–499 → 1, 500–1499 → 2, 1500–2999 → 3, 3000+ → 4 (max).
+// Levels: 0–499 XP → 1, 500–1499 → 2, 1500–2999 → 3, 3000+ → 4 (max).
 // The backend calculates them (backend/leveling.py) and sends current_level,
 // xp_into_level and xp_for_next_level in GET /users/me.
 

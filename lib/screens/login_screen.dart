@@ -62,6 +62,27 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // "Forgot password?": opens a small box with the email (pre-filled from the
+  // Email field). Firebase then emails a link to set a new password.
+  Future<void> _openForgotPassword() async {
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ForgotPasswordDialog(
+        initialEmail: _emailController.text.trim(),
+        authService: _authService,
+      ),
+    );
+    if (sent != true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'If an account exists for this email, we sent a reset link. '
+          'Check your inbox (and spam).',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +145,20 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _handleLogin,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        GrowySlideIn(
+                          index: 5,
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _openForgotPassword,
+                            child: Text(
+                              'Forgot password?',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -142,6 +177,103 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The "Reset password" box. Closes with true when the email was sent.
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({
+    required this.initialEmail,
+    required this.authService,
+  });
+
+  final String initialEmail;
+  final AuthService authService;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialEmail);
+  bool _isSending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final email = _controller.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Please enter your email.');
+      return;
+    }
+    setState(() {
+      _isSending = true;
+      _error = null;
+    });
+    final error = await widget.authService.sendPasswordReset(email);
+    if (!mounted) return;
+    if (error != null) {
+      setState(() {
+        _isSending = false;
+        _error = error;
+      });
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Enter your account's email and we'll send you a link "
+            'to set a new password.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            enabled: !_isSending,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => _send(),
+            decoration: InputDecoration(
+              labelText: 'Email',
+              hintText: 'you@example.com',
+              prefixIcon: const Icon(Icons.mail_outline),
+              errorText: _error,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSending ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _isSending ? null : _send,
+          child: _isSending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send'),
+        ),
+      ],
     );
   }
 }

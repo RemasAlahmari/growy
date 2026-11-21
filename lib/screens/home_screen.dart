@@ -180,9 +180,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (changed == true && mounted) _loadHomeData();
   }
 
-  // Level went up. If the character changes (1→2, 2→3, 3→4), the avatar
-  // evolves first and the level-up card opens after. Otherwise (0→1) only
-  // the card opens.
+  // Level went up. Each level (1–4) has its own character, so the avatar
+  // evolves first (1→2, 2→3, 3→4) and the level-up card opens after.
+  // The card-only branch is a safety net in case the stage did not change.
   void _celebrateLevelUp(int fromLevel, int toLevel) {
     if (avatarStageForLevel(toLevel) > avatarStageForLevel(fromLevel)) {
       setState(() {
@@ -294,22 +294,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // The level comes from the backend (current_level, 0–4).
+  // The level comes from the backend (current_level, 1–4).
   // These floors match the backend and are only used for the progress bar:
-  // 0–99 -> Level 0, 100–499 -> 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max)
-  static const List<int> _levelFloors = [0, 100, 500, 1500, 3000];
+  // 0–499 -> Level 1, 500–1499 -> 2, 1500–2999 -> 3, 3000+ -> 4 (max)
+  // _levelFloors[0] is where Level 1 starts, _levelFloors[1] Level 2, and so on.
+  static const List<int> _levelFloors = [0, 500, 1500, 3000];
+  static const int _minLevel = 1;
   static const int _maxLevel = 4;
 
   int get _level {
-    final level = _profile?.currentLevel ?? 0;
-    if (level < 0) return 0;
+    final level = _profile?.currentLevel ?? _minLevel;
+    if (level < _minLevel) return _minLevel;
     if (level > _maxLevel) return _maxLevel;
     return level;
   }
 
   bool get _isMaxLevel => _level >= _maxLevel;
-  int get _currentLevelFloor => _levelFloors[_level];
-  int? get _nextLevelFloor => _isMaxLevel ? null : _levelFloors[_level + 1];
+  int get _currentLevelFloor => _levelFloors[_level - 1];
+  int? get _nextLevelFloor => _isMaxLevel ? null : _levelFloors[_level];
   int get _xpIntoLevel {
     final xp = _totalXp - _currentLevelFloor;
     return xp < 0 ? 0 : xp;

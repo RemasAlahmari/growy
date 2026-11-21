@@ -75,4 +75,31 @@ class AuthService {
     }
     return null;
   }
+
+  /// Forgot password: Firebase emails a link where the user sets a new password.
+  /// Returns null when the email was sent, otherwise a message to show.
+  /// "No account for this email" also returns null, so the app never reveals
+  /// which emails have an account.
+  Future<String?> sendPasswordReset(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          return null;
+        case 'invalid-email':
+          return 'Please enter a valid email address.';
+        case 'network-request-failed':
+          return 'No internet connection. Please try again.';
+        case 'too-many-requests':
+          return 'Too many attempts. Please wait a few minutes and try again.';
+        default:
+          return e.message ?? 'Could not send the reset email. Please try again.';
+      }
+    } catch (e) {
+      debugPrint('Password reset failed: $e');
+      return 'Could not send the reset email. Please try again.';
+    }
+  }
 }

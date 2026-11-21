@@ -21,7 +21,7 @@ class User(SQLModel, table=True):
     username: str
     email: str
     total_points: int = Field(default=0)
-    current_level: int = Field(default=0)
+    current_level: int = Field(default=1)
     # Not used: the streak is calculated from HabitLog on every request (see get_user_streak).
     streak_days: int = Field(default=0)
     # "male" / "female", chosen on Sign Up. Decides the boy/girl avatar.
