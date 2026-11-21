@@ -19,7 +19,7 @@ class AvatarCustomizerScreen extends StatefulWidget {
   // Boy or girl the customizer opens with (girl if not given).
   final AvatarGender? initialGender;
 
-  // The user's backend level (0–4), so the preview shows the right stage.
+  // The user's backend level (1–4), so the preview shows the right stage.
   final int level;
 
   const AvatarCustomizerScreen({
@@ -27,7 +27,7 @@ class AvatarCustomizerScreen extends StatefulWidget {
     this.initialConfig,
     this.isFirstSetup = false,
     this.initialGender,
-    this.level = 0,
+    this.level = 1,
   });
 
   @override

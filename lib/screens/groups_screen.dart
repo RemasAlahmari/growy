@@ -469,7 +469,7 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
   final _name = TextEditingController();
   final _description = TextEditingController();
 
-  /// "run", "book", "water" or "mind". Decides the icon, the category
+  /// "run", "book", "water" or "workout". Decides the icon, the category
   /// (book = Study, the rest = Health) and which habits members see on Home.
   String _type = 'run';
 
@@ -484,7 +484,7 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
     ('run', 'Walking'),
     ('book', 'Reading'),
     ('water', 'Water'),
-    ('mind', 'Mindful'),
+    ('workout', 'Workout'),
   ];
 
   static const List<int?> _goals = [null, 500, 1000, 2000];
@@ -1163,8 +1163,8 @@ class _GroupAvatar extends StatelessWidget {
         return Icons.menu_book_rounded;
       case 'water':
         return Icons.water_drop_rounded;
-      case 'mind':
-        return Icons.self_improvement_rounded;
+      case 'workout':
+        return Icons.fitness_center_rounded;
       default:
         return Icons.groups_rounded;
     }
@@ -2247,7 +2247,7 @@ class _Group {
   /// "Study" or "Health".
   final String category;
 
-  /// Picks the Material icon: "run", "book", "water", "mind".
+  /// Picks the Material icon: "run", "book", "water", "workout".
   final String iconKey;
 
   /// Code friends type in "Join with a code". Shown on the group page.

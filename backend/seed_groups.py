@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from models import Room
 
-# The app has no "create group" screen yet, so these groups are added at startup
+# Default groups, added at startup so new users always have groups to join
 # (only the missing ones; edits made in the database are kept).
 # Names, descriptions and codes come from the Groups screen design.
 # A goal is "earn goal_target XP together this calendar month"; a verified
@@ -22,8 +22,8 @@ ROOMS = [
      "goal_title": "Earn 600 XP together this month", "goal_target": 600},
     {"name": "Exam Prep Circle", "category": "Study", "icon_key": "book", "code": "EXAM50",
      "description": "Focused study sessions for midterms and finals. Quiet, steady, consistent."},
-    {"name": "Mindful Mornings", "category": "Health", "icon_key": "mind", "code": "CALM30",
-     "description": "A calm start: stretch, breathe and eat a healthy breakfast before the day begins."},
+    {"name": "Morning Workouts", "category": "Health", "icon_key": "workout", "code": "FIT30",
+     "description": "Start the day with a workout: gym, weights or a home session. Snap it, earn XP, keep your streak."},
     {"name": "Book Club Readers", "category": "Study", "icon_key": "book", "code": "READ20",
      "description": "Twenty pages a day adds up to a book a month.",
      "goal_title": "Earn 500 XP together this month", "goal_target": 500},

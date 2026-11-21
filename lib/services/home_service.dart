@@ -31,7 +31,7 @@ class UserProfile {
           ? json['display_name'] as String
           : username,
       totalPoints: (json['total_points'] as num? ?? 0).toInt(),
-      currentLevel: (json['current_level'] as num? ?? 0).toInt(),
+      currentLevel: (json['current_level'] as num? ?? 1).toInt(),
       streakDays: (json['streak_days'] as num? ?? 0).toInt(),
       todayPoints: (json['today_points'] as num? ?? 0).toInt(),
       gender: json['gender'] as String?,
