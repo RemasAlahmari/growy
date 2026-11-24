@@ -1,4 +1,4 @@
-"""Groups ("rooms"): My Groups, Groups to join, join by code, leaderboard, goals.
+"""Groups: My Groups, Groups to join, join by code, leaderboard, goals.
 
 Rules (documented choices):
 - A member's group points = XP from their verified habits AFTER they joined that
@@ -24,13 +24,13 @@ from sqlmodel import Session, SQLModel, select
 from auth import verify_token
 from database import get_session
 from deps import get_current_user
-from models import KSA_TZ, Habit, HabitLog, Room, RoomDismissal, RoomMember, User, today_ksa
+from models import KSA_TZ, Habit, HabitLog, Group, GroupDismissal, GroupMember, User, today_ksa
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
 class JoinByCode(SQLModel):
-    room_code: str
+    group_code: str
 
 
 # Each group type decides its icon and its category ("Study" or "Health").
@@ -75,42 +75,42 @@ def _month_window():
     return _utc_naive(start), today.replace(day=last_day)
 
 
-def _points_rows(session: Session, room_id: int, since: Optional[datetime] = None):
+def _points_rows(session: Session, group_id: int, since: Optional[datetime] = None):
     # One row per member: (user_id, username, display_name, joined_at, points).
     # Counts only the group's habit, verified after the member joined.
-    room = session.get(Room, room_id)
-    habit_name = GROUP_HABIT.get((room.icon_key or "").lower()) if room else None
+    group = session.get(Group, group_id)
+    habit_name = GROUP_HABIT.get((group.icon_key or "").lower()) if group else None
     if habit_name:
         habit_ids = select(Habit.id).where(func.lower(Habit.name) == habit_name)
         habit_filter = HabitLog.habit_id.in_(habit_ids)
     else:
         habit_filter = false()  # unknown group type: no habit earns points here
     log_filter = [
-        HabitLog.user_id == RoomMember.user_id,
+        HabitLog.user_id == GroupMember.user_id,
         HabitLog.verification_status == "verified",
-        HabitLog.completed_at >= RoomMember.joined_at,
+        HabitLog.completed_at >= GroupMember.joined_at,
         habit_filter,
     ]
     if since is not None:
         log_filter.append(HabitLog.completed_at >= since)
     return session.exec(
         select(
-            RoomMember.user_id,
+            GroupMember.user_id,
             User.username,
             User.display_name,
-            RoomMember.joined_at,
+            GroupMember.joined_at,
             func.coalesce(func.sum(HabitLog.points_earned), 0),
         )
-        .join(User, User.id == RoomMember.user_id)
+        .join(User, User.id == GroupMember.user_id)
         .outerjoin(HabitLog, and_(*log_filter))
-        .where(RoomMember.room_id == room_id)
-        .group_by(RoomMember.user_id, User.username, User.display_name, RoomMember.joined_at)
+        .where(GroupMember.group_id == group_id)
+        .group_by(GroupMember.user_id, User.username, User.display_name, GroupMember.joined_at)
     ).all()
 
 
-def leaderboard(session: Session, room_id: int) -> list[BoardRow]:
+def leaderboard(session: Session, group_id: int) -> list[BoardRow]:
     rows = sorted(
-        _points_rows(session, room_id),
+        _points_rows(session, group_id),
         key=lambda r: (-int(r[4]), r[3], r[0]),  # points desc, joined first, id
     )
     return [
@@ -119,27 +119,27 @@ def leaderboard(session: Session, room_id: int) -> list[BoardRow]:
     ]
 
 
-def group_to_dict(session: Session, room: Room, user_id: int) -> dict:
+def group_to_dict(session: Session, group: Group, user_id: int) -> dict:
     # The shape _Group.fromJson expects in groups_screen.dart.
-    board = leaderboard(session, room.id)
+    board = leaderboard(session, group.id)
     me = next((row for row in board if row.user_id == user_id), None)
     goal = None
-    if room.goal_target:
+    if group.goal_target:
         month_start, month_end = _month_window()
-        current = sum(int(r[4]) for r in _points_rows(session, room.id, since=month_start))
+        current = sum(int(r[4]) for r in _points_rows(session, group.id, since=month_start))
         goal = {
-            "title": room.goal_title or f"Earn {room.goal_target:,} XP together this month",
+            "title": group.goal_title or f"Earn {group.goal_target:,} XP together this month",
             "current": current,
-            "target": room.goal_target,
+            "target": group.goal_target,
             "end_date": month_end.isoformat(),
         }
     return {
-        "id": room.id,
-        "room_name": room.name,
-        "description": room.description,
-        "category": room.category,
-        "icon_key": room.icon_key,
-        "room_code": room.code if me else None,
+        "id": group.id,
+        "group_name": group.name,
+        "description": group.description,
+        "category": group.category,
+        "icon_key": group.icon_key,
+        "group_code": group.code if me else None,
         "member_count": len(board),
         "is_joined": me is not None,
         "user_rank": me.rank if me else 0,
@@ -148,24 +148,24 @@ def group_to_dict(session: Session, room: Room, user_id: int) -> dict:
     }
 
 
-def _get_room(session: Session, room_id: int) -> Room:
-    room = session.get(Room, room_id)
-    if not room:
+def _get_group(session: Session, group_id: int) -> Group:
+    group = session.get(Group, group_id)
+    if not group:
         raise HTTPException(status_code=404, detail="Group not found.")
-    return room
+    return group
 
 
-def _membership(session: Session, room_id: int, user_id: int) -> Optional[RoomMember]:
+def _membership(session: Session, group_id: int, user_id: int) -> Optional[GroupMember]:
     return session.exec(
-        select(RoomMember).where(RoomMember.room_id == room_id, RoomMember.user_id == user_id)
+        select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.user_id == user_id)
     ).first()
 
 
-def _join(session: Session, room: Room, user_id: int) -> dict:
-    if _membership(session, room.id, user_id) is None:
-        session.add(RoomMember(room_id=room.id, user_id=user_id))
+def _join(session: Session, group: Group, user_id: int) -> dict:
+    if _membership(session, group.id, user_id) is None:
+        session.add(GroupMember(group_id=group.id, user_id=user_id))
         dismissal = session.exec(
-            select(RoomDismissal).where(RoomDismissal.room_id == room.id, RoomDismissal.user_id == user_id)
+            select(GroupDismissal).where(GroupDismissal.group_id == group.id, GroupDismissal.user_id == user_id)
         ).first()
         if dismissal:
             session.delete(dismissal)
@@ -173,14 +173,14 @@ def _join(session: Session, room: Room, user_id: int) -> dict:
             session.commit()
         except IntegrityError:  # two quick taps: already joined
             session.rollback()
-    return group_to_dict(session, room, user_id)
+    return group_to_dict(session, group, user_id)
 
 
 def _new_code(session: Session) -> str:
     # A random 6-character invite code that no other group uses yet.
     while True:
         code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
-        if session.exec(select(Room.id).where(Room.code == code)).first() is None:
+        if session.exec(select(Group.id).where(Group.code == code)).first() is None:
             return code
 
 
@@ -207,10 +207,10 @@ def create_group(
     if goal_target is not None and not 100 <= goal_target <= 100_000:
         raise HTTPException(status_code=422, detail="The group goal must be between 100 and 100,000 XP.")
 
-    if session.exec(select(Room.id).where(func.lower(Room.name) == name.lower())).first() is not None:
+    if session.exec(select(Group.id).where(func.lower(Group.name) == name.lower())).first() is not None:
         raise HTTPException(status_code=409, detail="A group with that name already exists.")
 
-    room = Room(
+    group = Group(
         name=name,
         description=description,
         category=GROUP_TYPES[icon_key],
@@ -219,40 +219,40 @@ def create_group(
         goal_title=f"Earn {goal_target:,} XP together this month" if goal_target else None,
         goal_target=goal_target,
     )
-    session.add(room)
+    session.add(group)
     try:
-        session.flush()  # gives the room its id
-        session.add(RoomMember(room_id=room.id, user_id=user.id))
+        session.flush()  # gives the group its id
+        session.add(GroupMember(group_id=group.id, user_id=user.id))
         session.commit()
     except IntegrityError:
         # Someone created a group with the same name (or code) at the same moment.
         session.rollback()
         raise HTTPException(status_code=409, detail="A group with that name already exists.")
-    session.refresh(room)
-    return group_to_dict(session, room, user.id)
+    session.refresh(group)
+    return group_to_dict(session, group, user.id)
 
 
 @router.get("/mine")
 def my_groups(session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     user = get_current_user(session, decoded_token)
-    rooms = session.exec(
-        select(Room).join(RoomMember, RoomMember.room_id == Room.id)
-        .where(RoomMember.user_id == user.id)
-        .order_by(RoomMember.joined_at)
+    groups = session.exec(
+        select(Group).join(GroupMember, GroupMember.group_id == Group.id)
+        .where(GroupMember.user_id == user.id)
+        .order_by(GroupMember.joined_at)
     ).all()
-    return [group_to_dict(session, room, user.id) for room in rooms]
+    return [group_to_dict(session, group, user.id) for group in groups]
 
 
 @router.get("/discover")
 def discover_groups(session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     # Groups the user hasn't joined or hidden, biggest first.
     user = get_current_user(session, decoded_token)
-    joined = select(RoomMember.room_id).where(RoomMember.user_id == user.id)
-    hidden = select(RoomDismissal.room_id).where(RoomDismissal.user_id == user.id)
-    rooms = session.exec(
-        select(Room).where(Room.id.not_in(joined), Room.id.not_in(hidden)).order_by(Room.id)
+    joined = select(GroupMember.group_id).where(GroupMember.user_id == user.id)
+    hidden = select(GroupDismissal.group_id).where(GroupDismissal.user_id == user.id)
+    candidates = session.exec(
+        select(Group).where(Group.id.not_in(joined), Group.id.not_in(hidden)).order_by(Group.id)
     ).all()
-    groups = [group_to_dict(session, room, user.id) for room in rooms]
+    groups = [group_to_dict(session, group, user.id) for group in candidates]
     return sorted(groups, key=lambda g: (-g["member_count"], g["id"]))
 
 
@@ -263,31 +263,31 @@ def join_by_code(
     decoded_token: dict = Depends(verify_token),
 ):
     user = get_current_user(session, decoded_token)
-    code = data.room_code.strip().upper()
+    code = data.group_code.strip().upper()
     if not code:
         raise HTTPException(status_code=422, detail="Enter the group code.")
-    room = session.exec(select(Room).where(Room.code == code)).first()
-    if not room:
+    group = session.exec(select(Group).where(Group.code == code)).first()
+    if not group:
         raise HTTPException(status_code=404, detail="No group found with that code.")
-    return _join(session, room, user.id)
+    return _join(session, group, user.id)
 
 
-@router.post("/{room_id}/join")
-def join_group(room_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
+@router.post("/{group_id}/join")
+def join_group(group_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     user = get_current_user(session, decoded_token)
-    return _join(session, _get_room(session, room_id), user.id)
+    return _join(session, _get_group(session, group_id), user.id)
 
 
-@router.post("/{room_id}/dismiss")
-def dismiss_group(room_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
+@router.post("/{group_id}/dismiss")
+def dismiss_group(group_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     # "Not interested": hide the group from Groups to join.
     user = get_current_user(session, decoded_token)
-    _get_room(session, room_id)
+    _get_group(session, group_id)
     exists = session.exec(
-        select(RoomDismissal.id).where(RoomDismissal.room_id == room_id, RoomDismissal.user_id == user.id)
+        select(GroupDismissal.id).where(GroupDismissal.group_id == group_id, GroupDismissal.user_id == user.id)
     ).first()
     if exists is None:
-        session.add(RoomDismissal(room_id=room_id, user_id=user.id))
+        session.add(GroupDismissal(group_id=group_id, user_id=user.id))
         try:
             session.commit()
         except IntegrityError:
@@ -295,12 +295,12 @@ def dismiss_group(room_id: int, session: Session = Depends(get_session), decoded
     return {"status": "ok"}
 
 
-@router.delete("/{room_id}/dismiss")
-def undo_dismiss_group(room_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
+@router.delete("/{group_id}/dismiss")
+def undo_dismiss_group(group_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     # "Undo" on the snack bar: show the group in suggestions again.
     user = get_current_user(session, decoded_token)
     dismissal = session.exec(
-        select(RoomDismissal).where(RoomDismissal.room_id == room_id, RoomDismissal.user_id == user.id)
+        select(GroupDismissal).where(GroupDismissal.group_id == group_id, GroupDismissal.user_id == user.id)
     ).first()
     if dismissal:
         session.delete(dismissal)
@@ -308,23 +308,23 @@ def undo_dismiss_group(room_id: int, session: Session = Depends(get_session), de
     return {"status": "ok"}
 
 
-@router.delete("/{room_id}/membership")
-def leave_group(room_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
+@router.delete("/{group_id}/membership")
+def leave_group(group_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     user = get_current_user(session, decoded_token)
-    _get_room(session, room_id)
-    member = _membership(session, room_id, user.id)
+    _get_group(session, group_id)
+    member = _membership(session, group_id, user.id)
     if member:
         session.delete(member)
         session.commit()
     return {"status": "ok"}
 
 
-@router.get("/{room_id}/leaderboard")
-def group_leaderboard(room_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
+@router.get("/{group_id}/leaderboard")
+def group_leaderboard(group_id: int, session: Session = Depends(get_session), decoded_token: dict = Depends(verify_token)):
     # Every member, ranked. Also used as the member list.
     user = get_current_user(session, decoded_token)
-    _get_room(session, room_id)
-    if _membership(session, room_id, user.id) is None:
+    _get_group(session, group_id)
+    if _membership(session, group_id, user.id) is None:
         raise HTTPException(status_code=403, detail="Join this group to see its leaderboard.")
     return [
         {
@@ -334,11 +334,11 @@ def group_leaderboard(room_id: int, session: Session = Depends(get_session), dec
             "points": row.points,
             "is_me": row.user_id == user.id,
         }
-        for row in leaderboard(session, room_id)
+        for row in leaderboard(session, group_id)
     ]
 
 
 def groups_joined(session: Session, user_id: int) -> int:
     return session.exec(
-        select(func.count()).select_from(RoomMember).where(RoomMember.user_id == user_id)
+        select(func.count()).select_from(GroupMember).where(GroupMember.user_id == user_id)
     ).one()
