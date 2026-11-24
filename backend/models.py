@@ -70,9 +70,9 @@ class Avatar(SQLModel, table=True):
 
 
 # ------------------------------------------------------------------
-# Groups ("rooms"). New tables: created automatically at startup.
+# Groups. New tables: created automatically at startup.
 # ------------------------------------------------------------------
-class Room(SQLModel, table=True):
+class Group(SQLModel, table=True):
     # A group users can join. The app has no "create group" screen, so the
     # default groups are added at startup (see seed_groups.py).
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -87,20 +87,20 @@ class Room(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now_utc)
 
 
-class RoomMember(SQLModel, table=True):
+class GroupMember(SQLModel, table=True):
     # A user in a group. Only XP earned after joined_at counts in that group.
-    __table_args__ = (UniqueConstraint("room_id", "user_id"),)
+    __table_args__ = (UniqueConstraint("group_id", "user_id"),)
     id: Optional[int] = Field(default=None, primary_key=True)
-    room_id: int = Field(foreign_key="room.id", index=True)
+    group_id: int = Field(foreign_key="group.id", index=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     joined_at: datetime = Field(default_factory=now_utc)
 
 
-class RoomDismissal(SQLModel, table=True):
+class GroupDismissal(SQLModel, table=True):
     # A group the user hid from "Groups to join" ("Not interested").
-    __table_args__ = (UniqueConstraint("room_id", "user_id"),)
+    __table_args__ = (UniqueConstraint("group_id", "user_id"),)
     id: Optional[int] = Field(default=None, primary_key=True)
-    room_id: int = Field(foreign_key="room.id", index=True)
+    group_id: int = Field(foreign_key="group.id", index=True)
     user_id: int = Field(foreign_key="user.id", index=True)
 
 

@@ -1,14 +1,14 @@
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from models import Room
+from models import Group
 
 # Default groups, added at startup so new users always have groups to join
 # (only the missing ones; edits made in the database are kept).
 # Names, descriptions and codes come from the Groups screen design.
 # A goal is "earn goal_target XP together this calendar month"; a verified
 # habit is worth 5-10 XP, so the targets are sized for a handful of members.
-ROOMS = [
+GROUPS = [
     {"name": "10K Steps Squad", "category": "Health", "icon_key": "run", "code": "STEPS10",
      "description": "Walk, run or hike your way to 10,000 steps a day with friends who keep you honest.",
      "goal_title": "Earn 1,000 XP together this month", "goal_target": 1000},
@@ -30,13 +30,13 @@ ROOMS = [
 ]
 
 
-def ensure_rooms(session: Session) -> list[str]:
+def ensure_groups(session: Session) -> list[str]:
     """Adds any default group that is missing (matched by name). Returns a report."""
     report = []
-    for data in ROOMS:
-        exists = session.exec(select(Room.id).where(Room.name == data["name"])).first()
+    for data in GROUPS:
+        exists = session.exec(select(Group.id).where(Group.name == data["name"])).first()
         if exists is None:
-            session.add(Room(**data))
+            session.add(Group(**data))
             report.append(f"Added: {data['name']}")
         else:
             report.append(f"Unchanged: {data['name']}")
@@ -53,5 +53,5 @@ if __name__ == "__main__":
     from database import engine
 
     with Session(engine) as s:
-        for line in ensure_rooms(s):
+        for line in ensure_groups(s):
             print(line)
