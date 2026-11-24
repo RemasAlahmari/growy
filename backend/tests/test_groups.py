@@ -6,13 +6,13 @@ from sqlmodel import select
 import main
 from auth import verify_token
 from conftest import TEST_UID, get_user, habit_id, upload
-from models import HabitLog, Room, RoomMember
-from seed_groups import ROOMS, ensure_rooms
+from models import HabitLog, Group, GroupMember
+from seed_groups import GROUPS, ensure_groups
 
 
 def seed(db):
-    ensure_rooms(db)
-    return {r.name: r.id for r in db.exec(select(Room)).all()}
+    ensure_groups(db)
+    return {r.name: r.id for r in db.exec(select(Group)).all()}
 
 
 def as_other():
@@ -23,25 +23,25 @@ def as_tester():
     main.app.dependency_overrides[verify_token] = lambda: {"uid": TEST_UID, "email": "t@example.com"}
 
 
-GROUP_KEYS = {"id", "room_name", "description", "category", "icon_key", "room_code",
+GROUP_KEYS = {"id", "group_name", "description", "category", "icon_key", "group_code",
               "member_count", "is_joined", "user_rank", "user_points", "goal"}
 
 
 def test_seed_adds_default_groups_once(db):
-    ensure_rooms(db)
-    report = ensure_rooms(db)
+    ensure_groups(db)
+    report = ensure_groups(db)
     assert all(line.startswith("Unchanged") for line in report)
-    assert len(db.exec(select(Room)).all()) == len(ROOMS)
+    assert len(db.exec(select(Group)).all()) == len(GROUPS)
 
 
 def test_discover_lists_all_groups_for_new_user(client, db):
     seed(db)
     groups = client.get("/groups/discover").json()
-    assert len(groups) == len(ROOMS)
+    assert len(groups) == len(GROUPS)
     g = groups[0]
     assert GROUP_KEYS <= g.keys()
     assert g["is_joined"] is False
-    assert g["room_code"] is None  # invite codes are only shown to members
+    assert g["group_code"] is None  # invite codes are only shown to members
     assert client.get("/groups/mine").json() == []
 
 
@@ -51,11 +51,11 @@ def test_join_moves_group_to_mine(client, db):
     assert r.status_code == 200, r.text
     g = r.json()
     assert g["is_joined"] is True
-    assert g["room_code"] == "STUDY24"
+    assert g["group_code"] == "STUDY24"
     assert g["member_count"] == 1
     assert g["user_rank"] == 1 and g["user_points"] == 0
-    assert [x["room_name"] for x in client.get("/groups/mine").json()] == ["Study Together"]
-    assert all(x["room_name"] != "Study Together" for x in client.get("/groups/discover").json())
+    assert [x["group_name"] for x in client.get("/groups/mine").json()] == ["Study Together"]
+    assert all(x["group_name"] != "Study Together" for x in client.get("/groups/discover").json())
 
 
 def test_join_twice_is_safe(client, db):
@@ -68,16 +68,16 @@ def test_join_twice_is_safe(client, db):
 
 def test_join_by_code_is_case_insensitive(client, db):
     seed(db)
-    r = client.post("/groups/join", json={"room_code": "  read20 "})
+    r = client.post("/groups/join", json={"group_code": "  read20 "})
     assert r.status_code == 200, r.text
-    assert r.json()["room_name"] == "Book Club Readers"
+    assert r.json()["group_name"] == "Book Club Readers"
 
 
 def test_join_by_unknown_code_is_404(client, db):
     seed(db)
-    r = client.post("/groups/join", json={"room_code": "NOPE99"})
+    r = client.post("/groups/join", json={"group_code": "NOPE99"})
     assert r.status_code == 404
-    assert client.post("/groups/join", json={"room_code": "   "}).status_code == 422
+    assert client.post("/groups/join", json={"group_code": "   "}).status_code == 422
 
 
 def test_join_unknown_group_is_404(client, db):
@@ -98,7 +98,7 @@ def test_dismiss_and_undo(client, db):
 def test_joining_a_dismissed_group_by_code_works(client, db):
     ids = seed(db)
     client.post(f"/groups/{ids['Morning Runners']}/dismiss")
-    r = client.post("/groups/join", json={"room_code": "GROWY1"})
+    r = client.post("/groups/join", json={"group_code": "GROWY1"})
     assert r.json()["is_joined"] is True
 
 
@@ -168,7 +168,7 @@ def test_group_goal_counts_this_months_xp(client, db):
     assert goal["current"] == 10
     assert goal["title"]
     datetime.fromisoformat(goal["end_date"])  # a valid date
-    no_goal = next(g for g in client.get("/groups/discover").json() if g["room_name"] == "Hydration Heroes")
+    no_goal = next(g for g in client.get("/groups/discover").json() if g["group_name"] == "Hydration Heroes")
     assert no_goal["goal"] is None
 
 
@@ -184,7 +184,7 @@ def test_discover_sorts_bigger_groups_first(client, db):
     as_other()
     client.post(f"/groups/{ids['Exam Prep Circle']}/join")
     as_tester()
-    assert client.get("/groups/discover").json()[0]["room_name"] == "Exam Prep Circle"
+    assert client.get("/groups/discover").json()[0]["group_name"] == "Exam Prep Circle"
 
 
 def test_unknown_user_gets_404(client, db):
@@ -196,9 +196,9 @@ def test_unknown_user_gets_404(client, db):
 def test_membership_rows_are_unique(db):
     ids = seed(db)
     user = get_user(db)
-    db.add(RoomMember(room_id=ids["Study Together"], user_id=user.id))
+    db.add(GroupMember(group_id=ids["Study Together"], user_id=user.id))
     db.commit()
-    db.add(RoomMember(room_id=ids["Study Together"], user_id=user.id))
+    db.add(GroupMember(group_id=ids["Study Together"], user_id=user.id))
     try:
         db.commit()
         raised = False
