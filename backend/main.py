@@ -19,7 +19,7 @@ from database import create_db_and_tables, database_kind, get_session, engine
 from deps import get_current_user
 from leveling import calculate_level, xp_progress
 from models import User, Habit, Avatar, HabitLog, today_ksa
-from seed_groups import ensure_rooms
+from seed_groups import ensure_groups
 from seed_habits import ensure_habits
 from streaks import count_streak, longest_streak
 
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
         for line in ensure_habits(session):  # adds the 4 default habits if they are missing
             if line.startswith("Added"):
                 logger.info("Habit %s", line)
-        for line in ensure_rooms(session):  # adds the default groups if they are missing
+        for line in ensure_groups(session):  # adds the default groups if they are missing
             if line.startswith("Added"):
                 logger.info("Group %s", line)
     try:
