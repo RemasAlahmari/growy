@@ -11,8 +11,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 import main
 from auth import verify_token
 from conftest import TEST_UID, get_user, habit_id, make_jpeg, upload
-from models import Avatar, Habit, Room, User
-from seed_groups import ROOMS, ensure_rooms
+from models import Avatar, Habit, Group, User
+from seed_groups import GROUPS, ensure_groups
 from seed_habits import HABITS, ensure_habits
 
 
@@ -237,13 +237,13 @@ def test_seeding_at_the_same_time_as_another_process_does_not_crash():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
-        ensure_rooms(s)
+        ensure_groups(s)
         ensure_habits(s)
     with Session(engine) as late:
-        assert "Skipped" in ensure_rooms(_SeesNothing(late))[-1]
+        assert "Skipped" in ensure_groups(_SeesNothing(late))[-1]
         assert "Skipped" in ensure_habits(_SeesNothing(late))[-1]
     with Session(engine) as s:
-        assert len(s.exec(select(Room)).all()) == len(ROOMS)
+        assert len(s.exec(select(Group)).all()) == len(GROUPS)
         assert len(s.exec(select(Habit)).all()) == len(HABITS)
 
 
@@ -258,7 +258,7 @@ def test_today_habits_include_category(client):
 
 def test_group_categories_match_habit_categories(client, db):
     # A group needs every habit with its category, so both must use the same two values.
-    ensure_rooms(db)
+    ensure_groups(db)
     group_categories = {g["category"] for g in client.get("/groups/discover").json()}
     habit_categories = {h["category"] for h in client.get("/habits/today").json()}
     assert group_categories == {"Study", "Health"}
