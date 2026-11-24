@@ -344,7 +344,7 @@ class _BackToHome extends StatelessWidget {
     );
   }
 }
-/// Bottom sheet: type a room code and join.
+/// Bottom sheet: type a group code and join.
 class _JoinWithCodeSheet extends StatefulWidget {
   const _JoinWithCodeSheet();
 
@@ -2238,7 +2238,7 @@ class _GroupGoal {
       );
 }
 
-/// A group (room). Used for both "My Groups" and "Discover Groups".
+/// A group. Used for both "My Groups" and "Discover Groups".
 class _Group {
   final String id;
   final String name;
@@ -2299,11 +2299,11 @@ class _Group {
 
   factory _Group.fromJson(Map<String, dynamic> json) => _Group(
         id: json['id'].toString(),
-        name: json['room_name'] as String? ?? json['name'] as String,
+        name: json['group_name'] as String? ?? json['name'] as String,
         description: (json['description'] ?? '') as String,
         category: (json['category'] ?? '') as String,
         iconKey: (json['icon_key'] ?? '') as String,
-        inviteCode: json['room_code'] as String?,
+        inviteCode: json['group_code'] as String?,
         memberCount: (json['member_count'] ?? 0) as int,
         isJoined: (json['is_joined'] ?? false) as bool,
         userRank: (json['user_rank'] ?? 0) as int,
@@ -2395,11 +2395,11 @@ class _GroupsData {
     return _Group.fromJson(json as Map<String, dynamic>);
   }
 
-  /// POST /groups/join {room_code}
+  /// POST /groups/join {group_code}
   Future<_Group> joinGroupByCode(String code) async {
     try {
       final json = await ApiClient.postJson('/groups/join', {
-        'room_code': code.trim().toUpperCase(),
+        'group_code': code.trim().toUpperCase(),
       });
       return _Group.fromJson(json as Map<String, dynamic>);
     } on ApiException catch (e) {

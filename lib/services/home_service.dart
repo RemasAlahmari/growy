@@ -146,7 +146,7 @@ class HomeService {
       final json = item as Map<String, dynamic>;
       return JoinedGroup(
         id: json['id'].toString(),
-        name: (json['room_name'] ?? json['name'] ?? '') as String,
+        name: (json['group_name'] ?? json['name'] ?? '') as String,
         category: normalizeCategory(json['category']) ?? 'Health',
         iconKey: (json['icon_key'] ?? '').toString(),
       );
