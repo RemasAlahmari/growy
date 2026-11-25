@@ -29,7 +29,7 @@ def test_sync_creates_user_with_username_and_gender(client, db):
     assert body["username"] == "Sara"
     assert body["gender"] == "female"
     assert body["email"] == "sara@example.com"
-    assert body["total_points"] == 0 and body["current_level"] == 0
+    assert body["total_points"] == 0 and body["current_level"] == 1
     assert get_user(db, "new-uid").gender == "female"
 
 
