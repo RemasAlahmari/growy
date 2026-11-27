@@ -73,19 +73,37 @@ class VerificationException implements Exception {
 }
 
 class VerificationService {
+  /// [client] and [getToken] are only passed by tests (a fake server and a
+  /// fake login). The app calls `VerificationService()` and gets the real
+  /// network and the Firebase login, exactly as before.
+  VerificationService({
+    http.Client? client,
+    Future<String?> Function()? getToken,
+  })  : _client = client,
+        _getToken = getToken ?? _firebaseToken;
+
+  final http.Client? _client;
+  final Future<String?> Function() _getToken;
+
   // The AI usually answers in a few seconds; the backend gives up after 30 s.
   static const Duration _timeout = Duration(seconds: 60);
+
+  /// The logged-in user's Firebase ID token, or null when nobody is logged in.
+  static Future<String?> _firebaseToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    return user.getIdToken();
+  }
 
   /// Uploads the photo as multipart form-data, field name "file".
   Future<VerificationResult> submitPhoto({
     required String habitId,
     required XFile photo,
   }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    final token = await _getToken();
+    if (token == null) {
       throw VerificationException('You are not logged in.');
     }
-    final token = await user.getIdToken();
 
     final uri = ApiClient.uri('/habits/$habitId/complete/ai');
     final bytes = await photo.readAsBytes();
@@ -104,7 +122,9 @@ class VerificationService {
 
     final http.Response response;
     try {
-      final streamed = await request.send().timeout(_timeout);
+      final client = _client;
+      final sending = client == null ? request.send() : client.send(request);
+      final streamed = await sending.timeout(_timeout);
       response = await http.Response.fromStream(streamed);
     } catch (e) {
       debugPrint('Photo upload to $uri failed: $e');
