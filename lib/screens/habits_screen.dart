@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/motion/motion.dart';
+import '../models/habit_history.dart';
 import '../models/habit_summary.dart';
 import '../services/api_client.dart';
 import '../services/home_service.dart';
@@ -43,7 +44,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
   late DateTime _selected;
 
   /// Months already fetched, keyed "2026-10", so going back is instant.
-  final Map<String, _MonthHistory> _cache = {};
+  final Map<String, MonthHistory> _cache = {};
   bool _loading = false;
   bool _failed = false;
 
@@ -58,7 +59,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
 
   String _key(DateTime m) => '${m.year}-${m.month}';
 
-  _MonthHistory? get _history => _cache[_key(_month)];
+  MonthHistory? get _history => _cache[_key(_month)];
 
   Future<void> _loadMonth(DateTime month, {bool force = false}) async {
     if (!force && _cache.containsKey(_key(month))) return;
@@ -130,7 +131,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
     await _loadMonth(_month, force: true);
   }
 
-  void _openPhoto(_HabitLog log) {
+  void _openPhoto(HabitLog log) {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -142,7 +143,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
   @override
   Widget build(BuildContext context) {
     final history = _history;
-    final dayLogs = history?.logsOn(_selected) ?? const <_HabitLog>[];
+    final dayLogs = history?.logsOn(_selected) ?? const <HabitLog>[];
     final dayXp = dayLogs.fold<int>(0, (sum, l) => sum + l.pointsEarned);
 
     return Scaffold(
@@ -259,7 +260,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
     );
   }
 
-  Widget _buildSummary(_MonthHistory? history) {
+  Widget _buildSummary(MonthHistory? history) {
     String value(int? n) => n == null ? '–' : _formatNumber(n);
     return Row(
       children: [
@@ -284,7 +285,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
     );
   }
 
-  Widget _buildEmptyDay(_MonthHistory history) {
+  Widget _buildEmptyDay(MonthHistory history) {
     final brandNew = history.logs.isEmpty && _isCurrentMonth;
     if (brandNew) {
       return _EmptyState(
@@ -442,7 +443,7 @@ class _BackToHome extends StatelessWidget {
 /// Full-screen, read-only view of a past verification photo.
 /// No share, download, replace or upload actions: it is a record only.
 class _PhotoViewerScreen extends StatelessWidget {
-  final _HabitLog log;
+  final HabitLog log;
   const _PhotoViewerScreen({super.key, required this.log});
 
   @override
@@ -775,7 +776,7 @@ class _CalendarLegend extends StatelessWidget {
 /// One verified completion in the history: photo thumbnail, name,
 /// category and time, "Verified with photo" badge, and XP earned.
 class _HistoryEntryCard extends StatelessWidget {
-  final _HabitLog log;
+  final HabitLog log;
   final VoidCallback onPhotoTap;
 
   const _HistoryEntryCard({
@@ -1240,85 +1241,6 @@ class _LoadError extends StatelessWidget {
   }
 }
 
-/// One photo-verified habit completion, as shown in the Habits history.
-class _HabitLog {
-  final String id;
-  final String habitId;
-  final String habitName;
-
-  /// "Study" or "Health".
-  final String category;
-  final DateTime completedAt;
-  final int pointsEarned;
-
-  /// Where the verification photo lives. A URL (http/https) once the backend
-  /// stores it, or a local file path for photos taken in this session.
-  /// These photos were always captured with the in-app camera; nothing is uploaded from the gallery.
-  final String imageUrl;
-
-  const _HabitLog({
-    required this.id,
-    required this.habitId,
-    required this.habitName,
-    required this.category,
-    required this.completedAt,
-    required this.pointsEarned,
-    required this.imageUrl,
-  });
-
-  factory _HabitLog.fromJson(Map<String, dynamic> json) {
-    return _HabitLog(
-      id: json['id'].toString(),
-      habitId: json['habit_id'].toString(),
-      habitName: (json['habit_name'] ?? '') as String,
-      category: (json['category'] ?? '') as String,
-      completedAt: DateTime.parse(json['completed_at'] as String).toLocal(),
-      pointsEarned: (json['points_earned'] ?? 0) as int,
-      // The backend sends "/photos/<token>.jpg" (or "" for older logs).
-      imageUrl: ApiClient.absoluteUrl((json['image_url'] ?? '') as String) ?? '',
-    );
-  }
-}
-
-/// All verified logs in one calendar month, plus the numbers the Habits page shows.
-class _MonthHistory {
-  /// First day of the month (time ignored).
-  final DateTime month;
-  final List<_HabitLog> logs;
-
-  _MonthHistory({required DateTime month, required List<_HabitLog> logs})
-    : month = DateTime(month.year, month.month),
-      logs = List.unmodifiable(
-        [...logs]..sort((a, b) => b.completedAt.compareTo(a.completedAt)),
-      );
-
-  /// Day of month (1–31) → number of habits completed that day.
-  Map<int, int> get dayCounts {
-    final counts = <int, int>{};
-    for (final log in logs) {
-      final day = log.completedAt.day;
-      counts[day] = (counts[day] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  int get habitsCompleted => logs.length;
-
-  int get xpEarned => logs.fold(0, (sum, log) => sum + log.pointsEarned);
-
-  int get daysActive => dayCounts.length;
-
-  /// Logs for one day, newest first.
-  List<_HabitLog> logsOn(DateTime date) => logs
-      .where(
-        (log) =>
-            log.completedAt.year == date.year &&
-            log.completedAt.month == date.month &&
-            log.completedAt.day == date.day,
-      )
-      .toList();
-}
-
 /// The two real habit categories (backend `HABIT_CATEGORIES`): Study and Health.
 class _HabitCategories {
   _HabitCategories._();
@@ -1348,15 +1270,15 @@ class _HabitCategories {
 // before photos were stored show a placeholder.
 
 class _HabitsData {
-  Future<_MonthHistory> getMonthHistory(DateTime month) async {
+  Future<MonthHistory> getMonthHistory(DateTime month) async {
     final key = '${month.year}-${month.month.toString().padLeft(2, '0')}';
     final list =
         await ApiClient.getJson('/habit-logs', query: {'month': key})
             as List<dynamic>;
-    return _MonthHistory(
+    return MonthHistory(
       month: month,
       logs: list
-          .map((item) => _HabitLog.fromJson(item as Map<String, dynamic>))
+          .map((item) => HabitLog.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
